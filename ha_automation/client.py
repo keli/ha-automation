@@ -24,8 +24,8 @@ class HAClient:
         load_dotenv()
 
         # Use provided values or fall back to environment variables
-        self.url = url or os.getenv('HA_URL')
-        self.token = token or os.getenv('HA_TOKEN')
+        self.url = url or os.getenv("HA_URL")
+        self.token = token or os.getenv("HA_TOKEN")
 
         if not self.url:
             raise ValueError(
@@ -40,21 +40,21 @@ class HAClient:
 
         # Parse URL to extract host and port
         # If URL doesn't have a scheme, add http://
-        if not self.url.startswith(('http://', 'https://')):
-            self.url = f'http://{self.url}'
+        if not self.url.startswith(("http://", "https://")):
+            self.url = f"http://{self.url}"
 
         # Ensure URL ends without trailing slash
-        self.url = self.url.rstrip('/')
+        self.url = self.url.rstrip("/")
 
         parsed = urlparse(self.url)
-        self.host = parsed.hostname or 'localhost'
+        self.host = parsed.hostname or "localhost"
         self.port = parsed.port or 8123
-        self.use_ssl = parsed.scheme == 'https'
+        self.use_ssl = parsed.scheme == "https"
 
         # Setup request headers
         self.headers = {
-            'Authorization': f'Bearer {self.token}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
         }
 
         self.session = requests.Session()
@@ -91,9 +91,9 @@ class HAClient:
             Exception if connection fails
         """
         try:
-            response = self._request('GET', '/api/')
+            response = self._request("GET", "/api/")
             data = response.json()
-            return data.get('message') == 'API running.'
+            return data.get("message") == "API running."
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Home Assistant: {e}")
 
@@ -104,7 +104,7 @@ class HAClient:
         Returns:
             Configuration dictionary
         """
-        response = self._request('GET', '/api/config')
+        response = self._request("GET", "/api/config")
         return response.json()
 
     def get_states(self, entity_id: Optional[str] = None) -> Any:
@@ -118,12 +118,14 @@ class HAClient:
             State dictionary or list of states
         """
         if entity_id:
-            response = self._request('GET', f'/api/states/{entity_id}')
+            response = self._request("GET", f"/api/states/{entity_id}")
         else:
-            response = self._request('GET', '/api/states')
+            response = self._request("GET", "/api/states")
         return response.json()
 
-    def call_service(self, domain: str, service: str, service_data: Optional[Dict] = None) -> Dict[str, Any]:
+    def call_service(
+        self, domain: str, service: str, service_data: Optional[Dict] = None
+    ) -> Dict[str, Any]:
         """
         Call a Home Assistant service.
 
@@ -135,8 +137,8 @@ class HAClient:
         Returns:
             Service response
         """
-        endpoint = f'/api/services/{domain}/{service}'
-        response = self._request('POST', endpoint, json=service_data or {})
+        endpoint = f"/api/services/{domain}/{service}"
+        response = self._request("POST", endpoint, json=service_data or {})
         return response.json() if response.text else {}
 
     def get_entities(self) -> Dict[str, Any]:
@@ -147,7 +149,7 @@ class HAClient:
             Dictionary with entities
         """
         states = self.get_states()
-        return {'entities': states}
+        return {"entities": states}
 
     def create_automation(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -168,11 +170,19 @@ class HAClient:
         Raises:
             requests.RequestException: On request failure
         """
-        endpoint = '/api/config/automation/config'
-        response = self._request('POST', endpoint, json=config)
+        # Extract automation ID from config
+        automation_id = config.get("id")
+        if not automation_id:
+            raise ValueError("Automation config must have an 'id' field")
+
+        # The endpoint requires the ID in the URL path
+        endpoint = f"/api/config/automation/config/{automation_id}"
+        response = self._request("POST", endpoint, json=config)
         return response.json() if response.text else {}
 
-    def update_automation(self, automation_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_automation(
+        self, automation_id: str, config: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Update existing automation.
 
@@ -186,8 +196,9 @@ class HAClient:
         Raises:
             requests.RequestException: On request failure
         """
-        endpoint = f'/api/config/automation/config/{automation_id}'
-        response = self._request('PUT', endpoint, json=config)
+        endpoint = f"/api/config/automation/config/{automation_id}"
+        # Home Assistant uses POST for both create and update
+        response = self._request("POST", endpoint, json=config)
         return response.json() if response.text else {}
 
     def __repr__(self) -> str:

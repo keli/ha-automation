@@ -2,7 +2,6 @@
 
 from typing import List, Optional, Dict, Any
 import requests
-import yaml
 from .client import HAClient
 from .models import AutomationState, AutomationInfo
 
@@ -252,9 +251,9 @@ class AutomationManager:
         except Exception:
             return None
 
-    def create_automation_from_config(self, config: Dict[str, Any]) -> str:
+    def create_automation(self, config: Dict[str, Any]) -> str:
         """
-        Create new automation from configuration dictionary.
+        Create new automation from configuration dictionary using Home Assistant API.
 
         Args:
             config: Automation configuration with:
@@ -281,29 +280,26 @@ class AutomationManager:
             ...     "action": [{"service": "light.turn_on", "target": {"entity_id": "light.hallway"}}],
             ...     "mode": "single"
             ... }
-            >>> manager.create_automation_from_config(config)
+            >>> manager.create_automation(config)
             'my_automation_123'
         """
         # Validate required fields
-        required_fields = ['id', 'alias', 'trigger', 'action']
-        missing_fields = [field for field in required_fields if field not in config]
-        if missing_fields:
-            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+        self.validate_config(config)
 
         try:
             # Create automation via API
-            result = self.client.create_automation(config)
+            self.client.create_automation(config)
 
-            # Reload automations to make it visible
+            # Reload automations to make it visible immediately
             self.reload_automations()
 
             return config['id']
         except Exception as e:
             raise RuntimeError(f"Failed to create automation: {e}")
 
-    def update_automation_config(self, automation_id: str, config: Dict[str, Any]) -> bool:
+    def update_automation(self, automation_id: str, config: Dict[str, Any]) -> bool:
         """
-        Update existing automation configuration.
+        Update existing automation configuration using Home Assistant API.
 
         Args:
             automation_id: Automation ID (not entity_id)
@@ -315,6 +311,9 @@ class AutomationManager:
         Raises:
             RuntimeError: If update fails
         """
+        # Validate config structure
+        self.validate_config(config)
+
         try:
             self.client.update_automation(automation_id, config)
             self.reload_automations()
@@ -322,84 +321,91 @@ class AutomationManager:
         except Exception as e:
             raise RuntimeError(f"Failed to update automation {automation_id}: {e}")
 
-    def generate_yaml(self, config: Dict[str, Any], single: bool = True) -> str:
+    def _find_automation_by_id(self, automation_id: str) -> Optional[str]:
         """
-        Generate YAML string from automation configuration.
+        Find automation entity_id by its automation_id attribute.
 
-        This is the RECOMMENDED way to create automations in Home Assistant.
-        The output YAML should be copied to automations.yaml file.
+        This handles cases where entity_id doesn't match the configured id
+        (e.g., when Chinese alias is converted to pinyin by Home Assistant).
 
         Args:
-            config: Automation configuration dictionary
-            single: If True, wraps in a list with one item (default).
-                   If False, returns just the dict (useful for batch generation).
+            automation_id: The automation ID from config
 
         Returns:
-            Formatted YAML string
+            entity_id if found, None otherwise
+        """
+        try:
+            all_automations = self.list_automations()
+            for auto in all_automations:
+                if auto.automation_id == automation_id:
+                    return auto.entity_id
+            return None
+        except Exception:
+            return None
+
+    def create_or_update(self, config: Dict[str, Any]) -> tuple[str, bool]:
+        """
+        Create new automation or update if it already exists (idempotent operation).
+
+        This method checks if an automation with the given ID exists:
+        - If exists: updates it with the new configuration
+        - If not exists: creates a new automation
+
+        This is the recommended method for sync workflows where scripts should
+        be idempotent and not create duplicates.
+
+        Args:
+            config: Automation configuration with required 'id' field
+
+        Returns:
+            Tuple of (automation_id, was_created) where:
+                - automation_id: The automation ID
+                - was_created: True if created, False if updated
+
+        Raises:
+            ValueError: If configuration is invalid
+            RuntimeError: If operation fails
 
         Example:
             >>> config = {
-            ...     "id": "my_auto",
-            ...     "alias": "My Automation",
-            ...     "trigger": [{"platform": "state", "entity_id": "light.bedroom", "to": "on"}],
-            ...     "action": [{"service": "light.turn_off", "target": {"entity_id": "light.living_room"}}]
+            ...     "id": "my_automation",  # Fixed ID
+            ...     "alias": "Night Light",
+            ...     "trigger": [...],
+            ...     "action": [...]
             ... }
-            >>> yaml_output = manager.generate_yaml(config)
-            >>> print(yaml_output)
+            >>> automation_id, created = manager.create_or_update(config)
+            >>> if created:
+            ...     print(f"Created: {automation_id}")
+            ... else:
+            ...     print(f"Updated: {automation_id}")
         """
-        # Validate required fields
-        required_fields = ['id', 'alias', 'trigger', 'action']
-        missing_fields = [field for field in required_fields if field not in config]
-        if missing_fields:
-            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+        # Validate config first
+        self.validate_config(config)
 
-        # Wrap in list if single automation
-        data = [config] if single else config
+        automation_id = config['id']
 
-        # Generate YAML with proper formatting
-        yaml_str = yaml.dump(
-            data,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-            indent=2
-        )
+        # Try to find automation by its automation_id attribute
+        # This handles cases where entity_id != "automation.{id}" due to alias conversion
+        entity_id = self._find_automation_by_id(automation_id)
+        if not entity_id:
+            # Fallback: construct expected entity_id
+            entity_id = f"automation.{automation_id}"
 
-        return yaml_str
+        try:
+            # Check if automation exists
+            existing = self.get_automation(entity_id)
 
-    def generate_yaml_batch(self, configs: List[Dict[str, Any]]) -> str:
-        """
-        Generate YAML string for multiple automations.
+            # Automation exists - update it
+            self.update_automation(automation_id, config)
+            return automation_id, False  # Not created (updated)
 
-        Args:
-            configs: List of automation configuration dictionaries
+        except ValueError:
+            # Automation doesn't exist - create it
+            self.create_automation(config)
+            return automation_id, True  # Created
+        except Exception as e:
+            raise RuntimeError(f"Failed to create or update automation {automation_id}: {e}")
 
-        Returns:
-            Formatted YAML string with all automations
-
-        Example:
-            >>> configs = [config1, config2, config3]
-            >>> yaml_output = manager.generate_yaml_batch(configs)
-        """
-        # Validate all configs
-        for i, config in enumerate(configs):
-            required_fields = ['id', 'alias', 'trigger', 'action']
-            missing_fields = [field for field in required_fields if field not in config]
-            if missing_fields:
-                raise ValueError(
-                    f"Config {i}: Missing required fields: {', '.join(missing_fields)}"
-                )
-
-        # Generate YAML
-        yaml_str = yaml.dump(
-            configs,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-            indent=2
-        )
-
-        return yaml_str
 
     def validate_config(self, config: Dict[str, Any]) -> bool:
         """
@@ -449,24 +455,3 @@ class AutomationManager:
 
         return True
 
-    def print_yaml_instructions(self, yaml_output: str) -> None:
-        """
-        Print formatted instructions for adding YAML to Home Assistant.
-
-        Args:
-            yaml_output: The YAML string to display
-        """
-        print("\n" + "=" * 70)
-        print("📋 Copy the automation YAML below:")
-        print("=" * 70)
-        print(yaml_output)
-        print("=" * 70)
-        print("\n📝 Instructions:")
-        print("1. Open your Home Assistant configuration directory")
-        print("2. Edit the 'automations.yaml' file")
-        print("3. Add the automation YAML above to the file")
-        print("4. Save the file")
-        print("5. Reload automations:")
-        print("   - In HA UI: Settings → Automations → ⋮ → Reload automations")
-        print("   - Or run: ha-automation reload")
-        print("=" * 70 + "\n")

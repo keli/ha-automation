@@ -21,13 +21,13 @@ The AI assistant understands what the user wants, and this toolkit provides the 
 - 📍 Filter by area/room
 - 💾 Smart caching for performance
 
-### Automation YAML Generation (Primary Feature)
-- 📝 **Generate automation YAML from natural language descriptions**
+### Automation Creation & Management (Primary Feature)
+- 🚀 **Create automations directly via Home Assistant REST API**
 - 🤖 **AI-friendly API for automation configuration**
 - ✅ Validate automation structure
-- 🎨 Beautiful YAML formatting with proper syntax
+- ⚡ Immediate feedback and error handling
 - 🌏 Support for Chinese and English
-- 📋 Copy-paste ready output
+- 🔄 Automatic reload after changes
 
 ### Automation Management
 - 📋 List and view automations with detailed information
@@ -165,6 +165,42 @@ ha-automation delete 1234567890
 ha-automation delete 1234567890 --force
 ```
 
+### Create Automations
+
+```bash
+# Run a Python automation script (uses API to create automation)
+ha-automation run my_automations/door_unlock_lights.py
+
+# Sync all scripts in my_automations/ directory
+ha-automation sync
+
+# Preview what would be synced without making changes
+ha-automation sync --dry-run
+
+# Sync and remove orphaned automations
+ha-automation sync --clean
+
+# Create automation from template (interactive, uses API)
+ha-automation create-from-template motion-light
+ha-automation create-from-template time-based
+
+# Available templates: motion-light, time-based, temperature-control, door-alert, auto-off
+```
+
+### Update Automation
+
+```bash
+# Show current automation configuration
+ha-automation update my_automation_123
+```
+
+### Validate YAML
+
+```bash
+# Validate automation YAML file (for reference only)
+ha-automation validate my_automation.yaml
+```
+
 ### Reload Automations
 
 ```bash
@@ -254,19 +290,18 @@ if automation_id:
 manager.reload_automations()
 ```
 
-### Generate Automation YAML (Recommended Method)
-
-**Important**: Home Assistant does NOT provide a standard API for creating automations programmatically. The `/api/config/automation/config` REST endpoint is an internal UI endpoint that is not guaranteed to exist.
-
-**The official Home Assistant approach is YAML files.** This toolkit makes YAML generation easy:
+### Create Automation via API (Recommended Method)
 
 ```python
-import yaml
-from ha_automation import HAClient, DeviceDiscovery
+import time
+from ha_automation import HAClient, DeviceDiscovery, AutomationManager
 
-# Initialize and discover devices
+# Initialize
 client = HAClient()
 discovery = DeviceDiscovery(client)
+manager = AutomationManager(client)
+
+# Discover devices
 discovery.discover_all()
 
 # Find devices
@@ -275,7 +310,7 @@ light = discovery.search("hallway light")[0]
 
 # Build automation configuration
 config = {
-    "id": "night_hallway_light",
+    "id": f"night_hallway_light_{int(time.time())}",  # Unique ID
     "alias": "夜间走廊照明",
     "description": "Turn on hallway light when motion detected at night",
     "trigger": [{
@@ -296,15 +331,18 @@ config = {
     "mode": "single"
 }
 
-# Generate YAML
-yaml_output = yaml.dump([config], default_flow_style=False, allow_unicode=True)
-print(yaml_output)
+# Create automation via API
+try:
+    automation_id = manager.create_automation(config)
+    print(f"✅ Created automation: {automation_id}")
 
-# User can then copy this to their automations.yaml file
-# and reload automations in Home Assistant
+    # Verify it was created
+    auto = manager.get_automation(f"automation.{automation_id}")
+    print(f"✅ Status: {auto.state}")
+    print(f"✅ Name: {auto.friendly_name}")
+except Exception as e:
+    print(f"❌ Error: {e}")
 ```
-
-See [examples/generate_automation_yaml.py](examples/generate_automation_yaml.py) for a complete working example.
 
 ### Custom Connection
 
@@ -320,7 +358,7 @@ manager = AutomationManager(client)
 ## Documentation
 
 - **[README.md](README.md)** - Overview and quick start (this file)
-- **[AI_GUIDE.md](AI_GUIDE.md)** - ⭐ **Complete guide for AI assistants with YAML workflow**
+- **[AI_GUIDE.md](AI_GUIDE.md)** - ⭐ **Complete guide for AI assistants with API workflow**
 
 ## Project Structure
 
@@ -332,28 +370,59 @@ ha-automation/
 ├── pyproject.toml               # Package configuration
 ├── README.md                     # This file
 ├── AI_GUIDE.md                   # Guide for AI assistants
-├── CHANGELOG.md                  # Version history
 ├── ha_automation/
 │   ├── __init__.py              # Package exports
 │   ├── client.py                # Home Assistant API client wrapper
 │   ├── models.py                # Data models (Pydantic)
 │   ├── device_discovery.py      # Device discovery and search
-│   ├── automation_manager.py   # Core automation operations (NEW: YAML helpers!)
-│   └── cli.py                   # CLI interface (NEW: generate-yaml, validate!)
-└── examples/
-    ├── example_automations.py   # Example usage scripts
-    ├── generate_automation_yaml.py  # YAML generation example (UPDATED!)
-    ├── improved_yaml_workflow.py    # Complete workflow examples (NEW!)
-    └── ai_usage_example.py      # AI assistant usage example
+│   ├── automation_manager.py   # Core automation operations
+│   └── cli.py                   # CLI interface
+├── examples/                     # General examples (templates & demos)
+│   ├── example_automations.py   # Example usage scripts
+│   ├── generate_automation_yaml.py  # YAML generation example
+│   ├── improved_yaml_workflow.py    # Complete workflow examples
+│   ├── ai_usage_example.py      # AI assistant usage example
+│   └── lock_event_monitor.py    # Lock event monitoring and testing tool
+└── my_automations/               # Your personal automations (gitignored)
+    ├── README.md                 # Instructions for personal automations
+    └── ...                       # Your custom automation files
 ```
 
 ## Examples
 
 See the [examples](examples/) directory for more detailed usage examples.
 
+## My Automations (Your Personal Configurations)
+
+The `my_automations/` directory is specifically for **your personal automation configurations**:
+
+- 🏠 Store automations tailored to your specific devices
+- 🔒 This directory is gitignored by default (won't be committed)
+- 🤖 AI assistants will automatically save your custom automations here
+- 📁 Keep your personal configs separate from the project examples
+
+**Quick Start**:
+```bash
+# AI assistants will create API-based automation scripts here
+# For example: door_unlock_lights.py, motion_sensor_lights.py, etc.
+
+# Option 1: Run a single automation script
+python my_automations/door_unlock_lights.py
+# Or: ha-automation run my_automations/door_unlock_lights.py
+
+# Option 2: Sync all automation scripts at once (recommended!)
+ha-automation sync
+# This runs all .py files in my_automations/ and creates/updates automations
+
+# Automations are created directly in Home Assistant via API!
+```
+
+See [my_automations/README.md](my_automations/README.md) for detailed instructions.
+
+
 ## For AI Assistants
 
-This toolkit is designed to be used by AI assistants to help users create and manage Home Assistant automations from natural language descriptions.
+This toolkit is designed to be used by AI assistants to help users create and manage Home Assistant automations from natural language descriptions. 
 
 **See [AI_GUIDE.md](AI_GUIDE.md)** for comprehensive documentation including:
 - Quick start guide for AI assistants
@@ -366,13 +435,9 @@ Example workflow:
 1. User describes automation in natural language (Chinese or English)
 2. AI assistant uses `DeviceDiscovery` to find relevant devices
 3. AI assistant generates automation configuration dictionary
-4. AI assistant generates YAML output for user to add to Home Assistant
-5. User copies YAML to automations.yaml and reloads
-
-Run the example:
-```bash
-python examples/generate_automation_yaml.py
-```
+4. AI assistant calls `manager.create_automation(config)` to create via API
+5. Automation is automatically created and reloaded in Home Assistant
+6. AI assistant verifies success and reports to user
 
 ## Requirements
 
@@ -387,25 +452,23 @@ python examples/generate_automation_yaml.py
 - `rich` - Beautiful terminal output
 - `pydantic` - Data validation and models
 - `requests` - HTTP library
-- `pyyaml` - YAML generation (optional)
 
-## Important: How Home Assistant Automation Creation Works
+## How It Works
 
-**The official Home Assistant way: YAML files + reload service**
-
-This toolkit embraces the official approach:
+**This toolkit uses the Home Assistant REST API to create and manage automations programmatically.**
 
 **What this toolkit does:**
 - ✅ Device discovery and intelligent search
-- ✅ Generate perfectly formatted automation YAML
+- ✅ Create automations directly via API
 - ✅ Manage existing automations (list, enable/disable, trigger, reload)
 - ✅ Validate automation configurations
-- ✅ Provide AI-friendly APIs for natural language → YAML conversion
+- ✅ Provide AI-friendly APIs for natural language → automation conversion
 
-**What you do:**
-1. Use this toolkit to generate YAML
-2. Copy the YAML to your `automations.yaml` file
-3. Reload automations (via this toolkit's `reload` command or HA UI)
+**What you get:**
+- 🚀 Fully automated automation creation
+- ⚡ Immediate feedback on success/failure
+- 🔄 Automatic reload after changes
+- 🎯 No manual YAML editing required
 
 
 ## Troubleshooting

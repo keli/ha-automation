@@ -58,5 +58,9 @@ dmypy.json
 # Cache files
 device_cache.json
 
+# User's personal automations (private configurations)
+my_automations/
+!my_automations/README.md
+
 # Claude Code
 .claude/

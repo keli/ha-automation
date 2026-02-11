@@ -1,27 +1,96 @@
 # AI Assistant Guide for Home Assistant Automation Toolkit
 
-This toolkit helps AI assistants (like Claude Code, GitHub Copilot, etc.) create Home Assistant automations from natural language descriptions.
+This toolkit helps AI assistants (like Claude Code, GitHub Copilot, etc.) create Home Assistant automations from natural language descriptions using the Home Assistant REST API.
+
+## ⚠️ Critical Rules
+
+### Always Use the API
+
+**Key Principle**: Automations should ALWAYS be created via the Home Assistant API.
+
+**Why:**
+- ✅ Fully automated - no manual steps required
+- ✅ Immediate feedback on success/failure
+- ✅ Changes take effect immediately after reload
+- ✅ Clean integration with Home Assistant's automation storage
+
+**Correct Workflow:**
+1. Create automation config dictionary in Python
+2. Call `manager.create_or_update(config)` (recommended) or `manager.create_automation(config)`
+3. Automation is automatically created/updated and reloaded
+4. Verify success by checking automation state
+
+**Wrong Approaches:**
+- ❌ Never generate YAML for manual editing
+- ❌ Never ask users to manually copy configurations
+- ❌ Never bypass the API
+
+### Use Fixed IDs for Sync Workflows
+
+**Key Principle**: For scripts in `my_automations/`, ALWAYS use fixed, descriptive IDs.
+
+**Why:**
+- ✅ `ha-automation sync` will update existing automations instead of creating duplicates
+- ✅ Idempotent - running script multiple times doesn't create duplicates
+- ✅ More semantic and easier to identify
+- ✅ Enables proper version control of automations
+
+**Correct Approach:**
+```python
+# ✅ CORRECT: Fixed ID
+automation_config = {
+    "id": "door_unlock_auto_lights",  # Fixed, descriptive ID
+    "alias": "门外开锁自动开灯",
+    ...
+}
+
+# Use create_or_update for idempotent operations
+automation_id, was_created = manager.create_or_update(automation_config)
+if was_created:
+    print(f"✅ Created: {automation_id}")
+else:
+    print(f"✅ Updated: {automation_id}")
+```
+
+**Wrong Approach:**
+```python
+# ❌ WRONG: Time-based ID creates duplicates every time
+automation_config = {
+    "id": f"my_automation_{int(time.time())}",  # Different ID each time!
+    ...
+}
+manager.create_automation(automation_config)  # Creates duplicate on each run
+```
+
+**When to use each method:**
+- `manager.create_or_update(config)` - **Recommended** for `my_automations/` scripts (idempotent)
+- `manager.create_automation(config)` - Only for one-off creations or when you specifically want a new instance
+- `manager.update_automation(id, config)` - Only when you know automation exists and want to update it
+
+### File Organization
+
+- ✅ **User's personal automations** → `my_automations/` directory
+  - Device-specific configurations
+  - Contains personal information (entity IDs)
+  - Gitignored by default
+
+- ✅ **General examples** → `examples/` directory
+  - Teaching examples
+  - Reusable templates
 
 ## Architecture
 
 ```
-User (natural language) → AI Assistant → Python Toolkit → YAML Generation → User Copies to File → HA Reload
+User (natural language) → AI Assistant → Python Script → HA API → Automation Created
 ```
 
 The AI assistant:
 1. Understands what the user wants
 2. Uses this toolkit to discover devices
-3. Generates automation configuration
-4. **Outputs formatted YAML for user to copy**
-5. User adds YAML to their `automations.yaml`
-6. User reloads (or toolkit triggers reload via API)
-
-## Why YAML Generation?
-
-Home Assistant does NOT provide a standard REST API for creating automation configurations:
-- ❌ REST API `/api/config/automation/config` is NOT part of the official API
-- ❌ WebSocket API does NOT provide automation creation commands
-- ✅ YAML files + reload service IS the official method (works in all installations)
+3. **Creates automation config dictionary**
+4. **Calls API to create automation**
+5. Verifies automation was created
+6. Reports success to user
 
 ## Quick Start for AI
 
@@ -60,14 +129,14 @@ all_sensors = discovery.get_by_domain('sensor')
 living_room = discovery.get_by_area("Living Room")
 ```
 
-### Step 3: Generate YAML for User to Copy
+### Step 3: Create/Update Automation via API
+
+**⚠️ IMPORTANT: Use fixed IDs, not time-based IDs!**
 
 ```python
-import yaml
-
-# Define automation configuration
+# Define automation configuration with FIXED ID
 automation_config = {
-    "id": "my_automation_123",  # Unique ID
+    "id": "night_hallway_light",  # ✅ Fixed ID - enables updates via sync
     "alias": "Night Hallway Light",  # Human-readable name
     "description": "Turn on hallway light when motion detected at night",
     "trigger": [
@@ -98,18 +167,19 @@ automation_config = {
     "mode": "single"
 }
 
-# Generate YAML output (new helper method)
-yaml_output = manager.generate_yaml(automation_config)
+# Create or update automation via API (RECOMMENDED - idempotent)
+try:
+    automation_id, was_created = manager.create_or_update(automation_config)
+    if was_created:
+        print(f"✅ Created automation: {automation_id}")
+    else:
+        print(f"✅ Updated automation: {automation_id}")
 
-# Present to user
-print("\n" + "="*60)
-print("Add this to your automations.yaml file:")
-print("="*60)
-print(yaml_output)
-print("="*60)
-print("\nThen reload automations by:")
-print("1. Click 'Reload Automations' in Home Assistant UI, OR")
-print("2. Run: ha-automation reload")
+    # Verify it was created/updated
+    auto = manager.get_automation(f"automation.{automation_id}")
+    print(f"✅ Verified: {auto.friendly_name} (state: {auto.state})")
+except Exception as e:
+    print(f"❌ Failed to create/update automation: {e}")
 ```
 
 ## Common Automation Patterns
@@ -124,9 +194,9 @@ User says: "晚上10点后走廊有人移动就开灯，亮度30%"
 motion_sensor = discovery.search("走廊 motion")[0]  # or "hallway motion"
 light = discovery.search("走廊 light")[0]  # or "hallway light"
 
-# 2. Create automation
+# 2. Create automation with FIXED ID
 config = {
-    "id": f"night_motion_light_{int(time.time())}",
+    "id": "night_motion_light_hallway",  # ✅ Fixed ID
     "alias": "夜间走廊照明",
     "description": "晚上10点后走廊有人移动就开灯，亮度30%",
     "trigger": [{
@@ -147,10 +217,9 @@ config = {
     "mode": "single"
 }
 
-# Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
+# Create or update via API (idempotent)
+automation_id, was_created = manager.create_or_update(config)
+print(f"✅ {'Created' if was_created else 'Updated'}: automation.{automation_id}")
 ```
 
 ### Pattern 2: Time-Based Automation
@@ -163,7 +232,7 @@ all_lights = discovery.get_lights()
 light_ids = [light.entity_id for light in all_lights]
 
 config = {
-    "id": f"night_lights_off_{int(time.time())}",
+    "id": "night_lights_off",  # ✅ Fixed ID
     "alias": "晚上关灯",
     "trigger": [{
         "platform": "time",
@@ -176,10 +245,8 @@ config = {
     "mode": "single"
 }
 
-# Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
+automation_id, was_created = manager.create_or_update(config)
+print(f"✅ {'Created' if was_created else 'Updated'}: automation.{automation_id}")
 ```
 
 ### Pattern 3: Temperature-Based Climate Control
@@ -192,7 +259,7 @@ temp_sensor = discovery.get_temperature_sensors()[0]
 climate = discovery.get_by_domain('climate')[0]
 
 config = {
-    "id": f"auto_cooling_{int(time.time())}",
+    "id": "auto_cooling",  # ✅ Fixed ID
     "alias": "自动降温",
     "trigger": [{
         "platform": "numeric_state",
@@ -207,10 +274,8 @@ config = {
     "mode": "single"
 }
 
-# Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
+automation_id, was_created = manager.create_or_update(config)
+print(f"✅ {'Created' if was_created else 'Updated'}: automation.{automation_id}")
 ```
 
 ### Pattern 4: Door Open Alert
@@ -222,7 +287,7 @@ User says: "晚上11点后如果门打开就发通知"
 door_sensor = discovery.get_door_sensors()[0]
 
 config = {
-    "id": f"night_door_alert_{int(time.time())}",
+    "id": "night_door_alert",  # ✅ Fixed ID
     "alias": "夜间开门提醒",
     "trigger": [{
         "platform": "state",
@@ -244,10 +309,8 @@ config = {
     "mode": "single"
 }
 
-# Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
+automation_id, was_created = manager.create_or_update(config)
+print(f"✅ {'Created' if was_created else 'Updated'}: automation.{automation_id}")
 ```
 
 ### Pattern 5: Auto Turn Off After Duration
@@ -259,7 +322,7 @@ User says: "走廊灯开启5分钟后自动关闭"
 light = discovery.search("走廊 light")[0]
 
 config = {
-    "id": f"auto_off_light_{int(time.time())}",
+    "id": "auto_off_light_hallway",  # ✅ Fixed ID
     "alias": "走廊灯自动关闭",
     "trigger": [{
         "platform": "state",
@@ -274,10 +337,8 @@ config = {
     "mode": "single"
 }
 
-# Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
+automation_id, was_created = manager.create_or_update(config)
+print(f"✅ {'Created' if was_created else 'Updated'}: automation.{automation_id}")
 ```
 
 ## Home Assistant Automation Reference
@@ -493,34 +554,31 @@ Parameters:
 
 1. **Always discover devices first** - Use `discovery.discover_all()` to see what's available
 2. **Search flexibly** - Support both Chinese and English device names
-3. **Use unique IDs** - Generate unique automation IDs with timestamp: `f"automation_{int(time.time())}"`
+3. **Use FIXED IDs** - ⚠️ Use fixed, descriptive IDs like `"night_hallway_light"`, NOT `f"automation_{int(time.time())}"`. Fixed IDs enable idempotent sync workflows.
 4. **Be specific** - When multiple matches found, ask user to clarify which device
 5. **Validate** - Check that required devices exist before creating automation
 6. **Use descriptive names** - Set `alias` to clearly describe what automation does
 7. **Add descriptions** - Use `description` field to explain automation in user's language
-8. **Generate clean YAML** - Use `manager.generate_yaml()` for properly formatted output
-9. **Provide clear instructions** - Tell user exactly where to copy the YAML
-10. **Offer to reload** - After user adds YAML, offer to run `manager.reload_automations()`
-
-## Important: What NOT to Do
-
-❌ **DO NOT** try to use `manager.create_automation_from_config()` - it uses an unreliable API endpoint
-❌ **DO NOT** tell users to "enable default_config" or modify their HA configuration
-❌ **DO NOT** promise that automations will be created automatically via API
-
-✅ **DO** generate YAML and present it clearly to users
-✅ **DO** explain this is the official Home Assistant method
-✅ **DO** make the copy-paste workflow as smooth as possible
+8. **Use create_or_update()** - Call `manager.create_or_update(config)` for idempotent operations (recommended for `my_automations/` scripts)
+9. **Verify creation** - After creation, verify with `manager.get_automation()`
+10. **Handle errors gracefully** - Catch exceptions and provide clear error messages
 
 ## Error Handling
 
 ```python
+from ha_automation import HAClient, DeviceDiscovery, AutomationManager
+
 try:
+    # Initialize
+    client = HAClient()
+    discovery = DeviceDiscovery(client)
+    manager = AutomationManager(client)
+
     # Discover devices
     devices = discovery.discover_all()
     if not devices:
         print("No devices found. Please check Home Assistant connection.")
-        return
+        exit(1)
 
     # Search for specific device
     lights = discovery.search("hallway light")
@@ -528,18 +586,22 @@ try:
         print("Could not find hallway light. Available lights:")
         for light in discovery.get_lights():
             print(f"  - {light.friendly_name} ({light.entity_id})")
-        return
+        exit(1)
 
-    # Create automation
-    automation_id = # Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
-    print(f"✓ Created automation: {automation_id}")
+    # Create or update automation (idempotent)
+    config = {
+        "id": "test_automation",  # ✅ Fixed ID
+        "alias": "Test Automation",
+        "trigger": [{"platform": "state", "entity_id": lights[0].entity_id, "to": "on"}],
+        "action": [{"service": "persistent_notification.create", "data": {"message": "Light turned on"}}]
+    }
 
-    # Verify it was created
-    automations = manager.list_automations()
-    print(f"Total automations: {len(automations)}")
+    automation_id, was_created = manager.create_or_update(config)
+    print(f"✓ {'Created' if was_created else 'Updated'} automation: {automation_id}")
+
+    # Verify it was created/updated
+    auto = manager.get_automation(f"automation.{automation_id}")
+    print(f"✓ Verified: {auto.friendly_name} (state: {auto.state})")
 
 except ValueError as e:
     print(f"Validation error: {e}")
@@ -552,7 +614,6 @@ except Exception as e:
 ## Full Workflow Example
 
 ```python
-import time
 from ha_automation import HAClient, DeviceDiscovery, AutomationManager
 
 def create_automation_from_description(description: str):
@@ -593,9 +654,9 @@ def create_automation_from_description(description: str):
     print(f"Using motion sensor: {motion_sensor.friendly_name}")
     print(f"Using light: {light.friendly_name}")
 
-    # Create automation
+    # Create automation with FIXED ID
     config = {
-        "id": f"night_hallway_light_{int(time.time())}",
+        "id": "night_hallway_light",  # ✅ Fixed ID
         "alias": "夜间走廊照明",
         "description": description,
         "trigger": [{
@@ -616,17 +677,14 @@ def create_automation_from_description(description: str):
         "mode": "single"
     }
 
-    print("Creating automation...")
-    automation_id = # Generate YAML and show to user
-yaml_output = manager.generate_yaml(config)
-print(yaml_output)
-print("\nCopy this to your automations.yaml file and reload!")
-    print(f"✓ Created: automation.{automation_id}")
+    print("Creating/updating automation...")
+    automation_id, was_created = manager.create_or_update(config)
+    print(f"✓ {'Created' if was_created else 'Updated'}: automation.{automation_id}")
 
-    # Show result
+    # Verify creation
     auto = manager.get_automation(f"automation.{automation_id}")
-    print(f"Status: {auto.state}")
-    print(f"Name: {auto.friendly_name}")
+    print(f"✓ Status: {auto.state}")
+    print(f"✓ Name: {auto.friendly_name}")
 
 # Use it
 create_automation_from_description("晚上10点后走廊有人移动就开灯，亮度30%")
@@ -634,7 +692,7 @@ create_automation_from_description("晚上10点后走廊有人移动就开灯，
 
 ## CLI Commands Reference
 
-The toolkit also provides CLI commands for manual testing:
+The toolkit provides CLI commands for automation management:
 
 ```bash
 # Discover and cache devices
@@ -647,6 +705,19 @@ ha-automation devices --type light
 ha-automation devices --area "Living Room"
 ha-automation devices --json  # JSON output
 
+# Sync all automation scripts in my_automations/ (Recommended!)
+ha-automation sync                    # Run all scripts to create/update automations
+ha-automation sync --dry-run         # Preview changes without applying
+ha-automation sync --clean           # Also remove orphaned automations
+
+# Run a single automation script (API-based)
+ha-automation run my_automations/door_unlock_lights.py
+
+# Create automations from templates (Interactive, API-based)
+ha-automation create-from-template motion-light
+ha-automation create-from-template time-based
+# Available templates: motion-light, time-based, temperature-control, door-alert, auto-off
+
 # List automations
 ha-automation list
 ha-automation list --state on
@@ -654,6 +725,9 @@ ha-automation list --json
 
 # Show automation details
 ha-automation show automation.my_automation
+
+# Update automation (shows current config)
+ha-automation update my_automation_123
 
 # Control automations
 ha-automation enable automation.my_automation
@@ -670,44 +744,11 @@ ha-automation delete <automation_id>
 # Reload all automations
 ha-automation reload
 
+# Validate YAML file (for reference only)
+ha-automation validate my_automation.yaml
+
 # Test connection
 ha-automation test
-```
-
-## Configuration Validation
-
-Always validate configurations before generating YAML:
-
-```python
-# Validate before generating
-try:
-    manager.validate_config(config)
-    yaml_output = manager.generate_yaml(config)
-except ValueError as e:
-    print(f"Configuration error: {e}")
-    return
-```
-
-The validator checks:
-- Required fields (id, alias, trigger, action)
-- Trigger/action are non-empty lists
-- Condition is list if present
-- Mode is valid (single, restart, queued, parallel)
-
-## CLI Commands for YAML Generation
-
-```bash
-# Generate YAML from command-line parameters
-ha-automation generate-yaml \
-  --motion-sensor binary_sensor.hallway_motion \
-  --light light.hallway \
-  --name "Night Hallway Light" \
-  --brightness 30 \
-  --time-after "22:00:00" \
-  --time-before "06:00:00"
-
-# Validate YAML file
-ha-automation validate my_automation.yaml
 ```
 
 ## Summary
@@ -717,15 +758,14 @@ This toolkit provides a clean API layer between AI assistants and Home Assistant
 1. **Understand** user's natural language description
 2. **Discover** devices using `DeviceDiscovery`
 3. **Build** automation configuration dictionary
-4. **Generate** YAML using `manager.generate_yaml(config)`
-5. **Present** formatted YAML to user with clear copy-paste instructions
-6. **Optionally reload** after user confirms they've added the YAML
+4. **Create** automation via `manager.create_automation(config)`
+5. **Verify** automation was created successfully
 
 The toolkit handles all the technical details:
 - ✅ Home Assistant API communication
 - ✅ Device discovery and search
 - ✅ Configuration validation
-- ✅ YAML formatting with proper syntax
-- ✅ Automation management (list, enable/disable, reload)
+- ✅ Automation creation and management
+- ✅ Error handling and retry logic
 
-**Remember**: Home Assistant doesn't provide an API to create automations. YAML generation is the official method, and this toolkit makes it easy.
+**Remember**: Always use the API to create automations - it's fast, reliable, and fully automated!
