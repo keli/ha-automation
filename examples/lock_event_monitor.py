@@ -7,6 +7,13 @@
     python lock_event_monitor.py
 
 然后按照提示进行各种开锁操作，脚本会记录所有事件详情
+
+注意：
+    不同型号的小米门锁，其事件参数的数值映射可能不同。
+    建议使用此脚本测试你的具体门锁型号，以获得准确的映射关系。
+    已知的一个映射示例：
+    - 操作位置: 1 = 门内手动（旋钮）, 2 = 门外
+    - 锁动作: 1 = 上锁, 2 = 开锁
 """
 
 import asyncio
@@ -24,66 +31,68 @@ from ha_automation.device_discovery import DeviceDiscovery
 
 
 # 测试步骤（通用版本，适配不同门锁型号）
+# 注意：操作位置的值因门锁型号而异，以下为参考值
+# 已知映射（某些型号）：操作位置 1=门内手动, 2=门外, 锁动作 1=上锁, 2=开锁
 TEST_STEPS = [
     {
         "step": 1,
         "description": "🏠 请在【门外】使用【指纹识别】开锁",
-        "expected": "操作位置=1, 操作方式=1或2, 锁动作=1"
+        "expected": "操作位置=1或2, 操作方式=1或2, 锁动作=1或2"
     },
     {
         "step": 2,
         "description": "🔑 请在【门外】使用【密码】开锁",
-        "expected": "操作位置=1, 操作方式=2或相关值, 锁动作=1"
+        "expected": "操作位置=1或2, 操作方式=2或相关值, 锁动作=1或2"
     },
     {
         "step": 3,
         "description": "📱 请在【门外】使用【NFC卡片】开锁（如果支持）",
-        "expected": "操作位置=1, 操作方式=3或相关值, 锁动作=1",
+        "expected": "操作位置=1或2, 操作方式=3或相关值, 锁动作=1或2",
         "optional": True
     },
     {
         "step": 4,
         "description": "👤 请在【门外】使用【人脸识别】开锁（小米门锁4Pro支持）",
-        "expected": "操作位置=1, 操作方式=?, 锁动作=1",
+        "expected": "操作位置=1或2, 操作方式=?, 锁动作=1或2",
         "optional": True
     },
     {
         "step": 5,
         "description": "🫱 请在【门外】使用【掌静脉识别】开锁（小米门锁4Pro支持）",
-        "expected": "操作位置=1, 操作方式=?, 锁动作=1",
+        "expected": "操作位置=1或2, 操作方式=?, 锁动作=1或2",
         "optional": True
     },
     {
         "step": 6,
         "description": "🩸 请在【门外】使用【指静脉识别】开锁（部分高端型号支持）",
-        "expected": "操作位置=1, 操作方式=?, 锁动作=1",
+        "expected": "操作位置=1或2, 操作方式=?, 锁动作=1或2",
         "optional": True
     },
     {
         "step": 7,
         "description": "🚪 请在【门内】使用【旋钮/把手】开锁",
-        "expected": "操作位置=2或3, 操作方式=13或相关值, 锁动作=1"
+        "expected": "操作位置=1或2或3, 操作方式=13或相关值, 锁动作=1或2"
     },
     {
         "step": 8,
         "description": "📲 请在【门外】使用【手机APP蓝牙】开锁",
-        "expected": "操作位置=1, 操作方式=5或12, 锁动作=1"
+        "expected": "操作位置=1或2, 操作方式=5或12, 锁动作=1或2"
     },
     {
         "step": 9,
         "description": "🔑 请使用【机械钥匙】开锁（如果可以检测到）",
-        "expected": "操作位置=1, 操作方式=4或相关值, 锁动作=1",
+        "expected": "操作位置=1或2, 操作方式=4或相关值, 锁动作=1或2",
         "optional": True
     },
     {
         "step": 10,
         "description": "🔒 请在【门外】【上提反锁】",
-        "expected": "操作位置=1或4, 操作方式=?, 锁动作=2"
+        "expected": "操作位置=1或2或4, 操作方式=?, 锁动作=1或2"
     },
     {
         "step": 11,
         "description": "🏠 请在【门内】【旋钮上锁】",
-        "expected": "操作位置=2或3, 操作方式=?, 锁动作=2"
+        "expected": "操作位置=1或2或3, 操作方式=?, 锁动作=1或2"
     },
 ]
 
@@ -107,10 +116,10 @@ class LockEventMonitor:
         # 查找所有门锁相关的事件实体
         lock_events = [
             e for e in all_entities
-            if e['entity_id'].startswith('event.')
-            and '门锁' in e.get('attributes', {}).get('friendly_name', '')
-            and ('锁事件' in e.get('attributes', {}).get('friendly_name', '')
-                 or 'lock_event' in e['entity_id'].lower())
+            if e.entity_id.startswith('event.')
+            and '门锁' in e.friendly_name
+            and ('锁事件' in e.friendly_name
+                 or 'lock_event' in e.entity_id.lower())
         ]
 
         if not lock_events:
@@ -119,8 +128,8 @@ class LockEventMonitor:
             return None
 
         if len(lock_events) == 1:
-            entity_id = lock_events[0]['entity_id']
-            name = lock_events[0].get('attributes', {}).get('friendly_name', '')
+            entity_id = lock_events[0].entity_id
+            name = lock_events[0].friendly_name
             print(f"✅ 自动检测到门锁事件: {name}")
             print(f"   实体ID: {entity_id}")
             return entity_id
@@ -128,8 +137,8 @@ class LockEventMonitor:
         # 多个门锁，让用户选择
         print(f"\n找到 {len(lock_events)} 个门锁事件实体:")
         for i, lock in enumerate(lock_events, 1):
-            name = lock.get('attributes', {}).get('friendly_name', '')
-            entity_id = lock['entity_id']
+            name = lock.friendly_name
+            entity_id = lock.entity_id
             print(f"  {i}. {name} ({entity_id})")
 
         while True:
@@ -137,7 +146,7 @@ class LockEventMonitor:
                 choice = input("\n请选择门锁编号 (1-{}): ".format(len(lock_events)))
                 idx = int(choice) - 1
                 if 0 <= idx < len(lock_events):
-                    return lock_events[idx]['entity_id']
+                    return lock_events[idx].entity_id
                 else:
                     print("❌ 无效的选择，请重新输入")
             except (ValueError, KeyboardInterrupt):
@@ -149,7 +158,7 @@ class LockEventMonitor:
         if not self.lock_event_entity:
             return {}
         try:
-            state = self.client.get_state(self.lock_event_entity)
+            state = self.client.get_states(self.lock_event_entity)
             return state
         except Exception as e:
             print(f"❌ 获取状态失败: {e}")

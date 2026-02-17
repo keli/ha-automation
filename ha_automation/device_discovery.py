@@ -31,12 +31,22 @@ class DeviceDiscovery:
 
         Returns:
             List of Device objects
+
+        Raises:
+            RuntimeError: If cache not found and cannot fetch from HA
         """
         # Load from cache if it exists and refresh not forced
         if not force_refresh and self.cache_file.exists():
             self._load_cache()
             if self.devices:
                 return self.devices
+
+        # Cache not found or refresh forced - fetch from Home Assistant
+        if not force_refresh and not self.cache_file.exists():
+            raise RuntimeError(
+                f"Device cache not found at {self.cache_file.absolute()}. "
+                f"Please run 'ha-automation discover' first to create the cache."
+            )
 
         # Fetch all states from Home Assistant
         try:
@@ -45,7 +55,7 @@ class DeviceDiscovery:
             self._save_cache()
             return self.devices
         except Exception as e:
-            raise RuntimeError(f"Failed to discover devices: {e}")
+            raise RuntimeError(f"Failed to discover devices from Home Assistant: {e}")
 
     def search(self, query: str) -> List[Device]:
         """

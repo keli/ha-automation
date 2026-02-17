@@ -288,15 +288,15 @@ def test():
 
 
 @main.command()
-@click.option('--force', is_flag=True, help='Force refresh from Home Assistant')
-def discover(force: bool):
+@click.option('--no-refresh', is_flag=True, help='Use cached data instead of refreshing from Home Assistant')
+def discover(no_refresh: bool):
     """Discover and cache all devices from Home Assistant."""
     try:
         client = HAClient()
         discovery = DeviceDiscovery(client)
 
         with console.status("[blue]Discovering devices..."):
-            devices = discovery.discover_all(force_refresh=force)
+            devices = discovery.discover_all(force_refresh=not no_refresh)
 
         # Group by domain
         by_domain = {}
@@ -766,12 +766,13 @@ def sync(directory: str, dry_run: bool, clean: bool):
             continue
 
         try:
-            # Run the script
+            # Run the script from current directory (project root)
+            # This ensures device_cache.json is found in the correct location
             result = subprocess.run(
-                [sys.executable, str(script)],
+                [sys.executable, str(script.absolute())],
                 capture_output=True,
                 text=True,
-                cwd=script.parent,
+                cwd=Path.cwd(),
                 timeout=30
             )
 
