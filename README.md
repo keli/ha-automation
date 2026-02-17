@@ -169,9 +169,10 @@ ha-automation delete 1234567890 --force
 
 ```bash
 # Run a Python automation script (uses API to create automation)
-ha-automation run my_automations/door_unlock_lights.py
+ha-automation run ~/.ha-automation/my_automations/door_unlock_lights.py
 
-# Sync all scripts in my_automations/ directory
+# Sync scripts in the default user directory:
+# ~/.ha-automation/my_automations
 ha-automation sync
 
 # Preview what would be synced without making changes
@@ -179,6 +180,13 @@ ha-automation sync --dry-run
 
 # Sync and remove orphaned automations
 ha-automation sync --clean
+
+# Use a custom scripts directory
+ha-automation sync --directory /path/to/your/automations
+
+# Or configure default scripts directory with env var
+export HA_AUTOMATION_SCRIPTS_DIR=/path/to/your/automations
+ha-automation sync
 
 # Create automation from template (interactive, uses API)
 ha-automation create-from-template motion-light
@@ -383,41 +391,47 @@ ha-automation/
 │   ├── improved_yaml_workflow.py    # Complete workflow examples
 │   ├── ai_usage_example.py      # AI assistant usage example
 │   └── lock_event_monitor.py    # Lock event monitoring and testing tool
-└── my_automations/               # Your personal automations (gitignored)
-    ├── README.md                 # Instructions for personal automations
-    └── ...                       # Your custom automation files
+└── my_automations/               # Optional local workspace/symlink for AI convenience
 ```
 
 ## Examples
 
 See the [examples](examples/) directory for more detailed usage examples.
 
-## My Automations (Your Personal Configurations)
+## Automation Scripts Directory
 
-The `my_automations/` directory is specifically for **your personal automation configurations**:
+By default, automation scripts are stored in your user directory:
 
-- 🏠 Store automations tailored to your specific devices
-- 🔒 This directory is gitignored by default (won't be committed)
-- 🤖 AI assistants will automatically save your custom automations here
-- 📁 Keep your personal configs separate from the project examples
+`~/.ha-automation/my_automations`
+
+This keeps personal automation data isolated from the repository lifecycle (delete/reset/update repo without losing scripts).
+
+Directory resolution priority for `ha-automation sync`:
+1. `--directory` option
+2. `HA_AUTOMATION_SCRIPTS_DIR` environment variable
+3. Default path: `~/.ha-automation/my_automations`
+
+Recommended setup for AI convenience:
+- Keep real data in `~/.ha-automation/my_automations`
+- Create a symlink in project root:
+  - `ln -s ~/.ha-automation/my_automations ./my_automations`
 
 **Quick Start**:
 ```bash
-# AI assistants will create API-based automation scripts here
-# For example: door_unlock_lights.py, motion_sensor_lights.py, etc.
+# Create the user scripts directory once
+mkdir -p ~/.ha-automation/my_automations
 
-# Option 1: Run a single automation script
-python my_automations/door_unlock_lights.py
-# Or: ha-automation run my_automations/door_unlock_lights.py
+# Optional: expose it in current repo for easier AI/context access
+ln -s ~/.ha-automation/my_automations ./my_automations
 
-# Option 2: Sync all automation scripts at once (recommended!)
+# Sync all scripts from default user directory
 ha-automation sync
-# This runs all .py files in my_automations/ and creates/updates automations
+
+# Run a single script
+ha-automation run ~/.ha-automation/my_automations/door_unlock_lights.py
 
 # Automations are created directly in Home Assistant via API!
 ```
-
-See [my_automations/README.md](my_automations/README.md) for detailed instructions.
 
 
 ## For AI Assistants

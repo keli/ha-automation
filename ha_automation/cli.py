@@ -2,11 +2,13 @@
 
 import click
 import json
+import os
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from .client import HAClient
@@ -15,6 +17,8 @@ from .device_discovery import DeviceDiscovery
 
 
 console = Console()
+DEFAULT_SCRIPTS_DIR = Path.home() / ".ha-automation" / "my_automations"
+SCRIPTS_DIR_ENV_VAR = "HA_AUTOMATION_SCRIPTS_DIR"
 
 
 def get_manager() -> AutomationManager:
@@ -45,6 +49,20 @@ def format_datetime(dt: Optional[datetime]) -> str:
         return f"{minutes}m ago"
     else:
         return "Just now"
+
+
+def resolve_scripts_dir(directory: Optional[str]) -> Path:
+    """Resolve automation scripts directory with CLI > env > default precedence."""
+    if directory:
+        candidate = Path(directory).expanduser()
+    else:
+        env_dir = os.getenv(SCRIPTS_DIR_ENV_VAR)
+        candidate = Path(env_dir).expanduser() if env_dir else DEFAULT_SCRIPTS_DIR
+
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+
+    return candidate
 
 
 @click.group()
@@ -439,7 +457,7 @@ def run(script_path):
     This replaces the old YAML import workflow with a fully automated API approach.
 
     Example:
-        ha-automation run my_automations/door_unlock_lights.py
+        ha-automation run ~/.ha-automation/my_automations/door_unlock_lights.py
     """
     import subprocess
     import sys
@@ -666,15 +684,16 @@ def update(automation_id):
 
 
 @main.command('sync')
-@click.option('--directory', '-d', default='my_automations',
-              help='Directory containing automation scripts (default: my_automations)')
+@click.option('--directory', '-d', default=None,
+              help='Directory containing automation scripts. '
+                   'Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.ha-automation/my_automations')
 @click.option('--dry-run', is_flag=True,
               help='Show what would be done without making changes')
 @click.option('--clean', is_flag=True,
               help='Remove automations from HA that no longer have corresponding scripts')
-def sync(directory: str, dry_run: bool, clean: bool):
+def sync(directory: Optional[str], dry_run: bool, clean: bool):
     """
-    Synchronize my_automations/ scripts with Home Assistant.
+    Synchronize automation scripts with Home Assistant.
 
     This command:
     1. Scans the directory for Python automation scripts
@@ -682,7 +701,7 @@ def sync(directory: str, dry_run: bool, clean: bool):
     3. Optionally removes orphaned automations (with --clean)
 
     Examples:
-        # Sync all scripts in my_automations/
+        # Sync scripts in default directory (~/.ha-automation/my_automations)
         ha-automation sync
 
         # Preview changes without applying them
@@ -697,22 +716,24 @@ def sync(directory: str, dry_run: bool, clean: bool):
     import subprocess
     import sys
     import re
-    from pathlib import Path
 
-    scripts_dir = Path.cwd() / directory
+    scripts_dir = resolve_scripts_dir(directory)
 
     if not scripts_dir.exists():
         console.print(f"[red]Directory not found:[/red] {scripts_dir}")
+        console.print(
+            f"[bright_black]Tip:[/bright_black] Create it or set {SCRIPTS_DIR_ENV_VAR} to an existing path."
+        )
         raise click.Abort()
 
     # Find all Python scripts
     script_files = sorted(scripts_dir.glob('*.py'))
 
     if not script_files:
-        console.print(f"[dark_orange]No Python scripts found in {directory}/[/dark_orange]")
+        console.print(f"[dark_orange]No Python scripts found in {scripts_dir}[/dark_orange]")
         return
 
-    console.print(f"\n[blue]Found {len(script_files)} automation script(s) in {directory}/[/blue]\n")
+    console.print(f"\n[blue]Found {len(script_files)} automation script(s) in {scripts_dir}[/blue]\n")
 
     # In dry-run mode, first get all existing automations
     automation_map = {}
