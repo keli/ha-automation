@@ -17,7 +17,7 @@ from .device_discovery import DeviceDiscovery
 
 
 console = Console()
-DEFAULT_SCRIPTS_DIR = Path.home() / ".ha-automation" / "my_automations"
+DEFAULT_SCRIPTS_DIR = Path.home() / ".config" / "ha-automation" / "automations"
 SCRIPTS_DIR_ENV_VAR = "HA_AUTOMATION_SCRIPTS_DIR"
 
 
@@ -326,7 +326,8 @@ def discover(no_refresh: bool):
             devs = by_domain[domain]
             console.print(f"  • {len(devs):3d} {domain}")
 
-        console.print("\n[bright_black]Cache saved to device_cache.json[/bright_black]")
+        cache_path = Path.home() / ".cache" / "ha-automation" / "device_cache.json"
+        console.print(f"\n[bright_black]Cache saved to {cache_path}[/bright_black]")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -457,7 +458,7 @@ def run(script_path):
     This replaces the old YAML import workflow with a fully automated API approach.
 
     Example:
-        ha-automation run ~/.ha-automation/my_automations/door_unlock_lights.py
+        ha-automation run ~/.config/ha-automation/automations/door_unlock_lights.py
     """
     import subprocess
     import sys
@@ -686,7 +687,7 @@ def update(automation_id):
 @main.command('sync')
 @click.option('--directory', '-d', default=None,
               help='Directory containing automation scripts. '
-                   'Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.ha-automation/my_automations')
+                   'Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.config/ha-automation/automations')
 @click.option('--dry-run', is_flag=True,
               help='Show what would be done without making changes')
 @click.option('--clean', is_flag=True,
@@ -701,7 +702,7 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
     3. Optionally removes orphaned automations (with --clean)
 
     Examples:
-        # Sync scripts in default directory (~/.ha-automation/my_automations)
+        # Sync scripts in default directory (~/.config/ha-automation/automations)
         ha-automation sync
 
         # Preview changes without applying them

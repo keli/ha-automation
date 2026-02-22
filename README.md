@@ -60,12 +60,14 @@ Once installed, the `ha-automation` CLI command will be available globally.
 
 ## Configuration
 
-Create a `.env` file in the project root with your Home Assistant credentials:
+Create `~/.config/ha-automation/config` with your Home Assistant credentials:
 
-```env
+```
 HA_URL=http://192.168.1.100:8123
 HA_TOKEN=your_long_lived_access_token
 ```
+
+You can also use a `.env` file in the current working directory (overrides the config file).
 
 ### Getting a Long-Lived Access Token
 
@@ -73,7 +75,7 @@ HA_TOKEN=your_long_lived_access_token
 2. Scroll to the bottom to "Long-Lived Access Tokens"
 3. Click "Create Token"
 4. Give it a name (e.g., "ha-automation")
-5. Copy the token and add it to your `.env` file
+5. Copy the token and add it to `~/.config/ha-automation/config`
 
 ## CLI Usage
 
@@ -169,10 +171,10 @@ ha-automation delete 1234567890 --force
 
 ```bash
 # Run a Python automation script (uses API to create automation)
-ha-automation run ~/.ha-automation/my_automations/door_unlock_lights.py
+ha-automation run ~/.config/ha-automation/automations/door_unlock_lights.py
 
 # Sync scripts in the default user directory:
-# ~/.ha-automation/my_automations
+# ~/.config/ha-automation/automations
 ha-automation sync
 
 # Preview what would be synced without making changes
@@ -224,7 +226,7 @@ ha-automation reload
 from ha_automation import HAClient, DeviceDiscovery
 
 # Initialize
-client = HAClient()  # Reads from .env automatically
+client = HAClient()  # Reads from ~/.config/ha-automation/config automatically
 discovery = DeviceDiscovery(client)
 
 # Discover all devices
@@ -261,7 +263,7 @@ for device in all_lights[:5]:
 ```python
 from ha_automation import HAClient, AutomationManager
 
-# Initialize client (reads from .env automatically)
+# Initialize client (reads from ~/.config/ha-automation/config automatically)
 client = HAClient()
 manager = AutomationManager(client)
 
@@ -372,7 +374,7 @@ manager = AutomationManager(client)
 
 ```
 ha-automation/
-├── .env                          # Environment variables (not in git)
+│   # Config lives in ~/.config/ha-automation/config (not in repo)
 ├── .gitignore                    # Git ignore rules
 ├── requirements.txt              # Python dependencies
 ├── pyproject.toml               # Package configuration
@@ -400,35 +402,27 @@ See the [examples](examples/) directory for more detailed usage examples.
 
 ## Automation Scripts Directory
 
-By default, automation scripts are stored in your user directory:
+By default, automation scripts are stored in your user config directory:
 
-`~/.ha-automation/my_automations`
+`~/.config/ha-automation/automations`
 
-This keeps personal automation data isolated from the repository lifecycle (delete/reset/update repo without losing scripts).
+This keeps personal automation data isolated from the repository (delete/reset/update repo without losing scripts).
 
 Directory resolution priority for `ha-automation sync`:
 1. `--directory` option
 2. `HA_AUTOMATION_SCRIPTS_DIR` environment variable
-3. Default path: `~/.ha-automation/my_automations`
-
-Recommended setup for AI convenience:
-- Keep real data in `~/.ha-automation/my_automations`
-- Create a symlink in project root:
-  - `ln -s ~/.ha-automation/my_automations ./my_automations`
+3. Default path: `~/.config/ha-automation/automations`
 
 **Quick Start**:
 ```bash
-# Create the user scripts directory once
-mkdir -p ~/.ha-automation/my_automations
-
-# Optional: expose it in current repo for easier AI/context access
-ln -s ~/.ha-automation/my_automations ./my_automations
+# Directory is created automatically on first use, or create it manually:
+mkdir -p ~/.config/ha-automation/automations
 
 # Sync all scripts from default user directory
 ha-automation sync
 
 # Run a single script
-ha-automation run ~/.ha-automation/my_automations/door_unlock_lights.py
+ha-automation run ~/.config/ha-automation/automations/door_unlock_lights.py
 
 # Automations are created directly in Home Assistant via API!
 ```
@@ -500,7 +494,7 @@ If you get connection errors:
 If you get 401 Unauthorized:
 1. Verify your token hasn't expired (tokens last 10 years)
 2. Try generating a new long-lived access token
-3. Check that the token is correctly set in `.env`
+3. Check that the token is correctly set in `~/.config/ha-automation/config`
 
 ### Automation Not Found
 

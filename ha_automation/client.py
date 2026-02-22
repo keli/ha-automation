@@ -3,6 +3,7 @@
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse, urljoin
 import os
+from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
@@ -20,8 +21,10 @@ class HAClient:
             token: Long-lived access token
                    If not provided, loads from HA_TOKEN environment variable
         """
-        # Load environment variables from .env file
-        load_dotenv()
+        # Load environment variables: XDG config dir first, then cwd (cwd overrides)
+        xdg_config = Path.home() / ".config" / "ha-automation" / "config"
+        load_dotenv(xdg_config)
+        load_dotenv(override=True)
 
         # Use provided values or fall back to environment variables
         self.url = url or os.getenv("HA_URL")

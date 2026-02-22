@@ -6,11 +6,13 @@ from pathlib import Path
 from .client import HAClient
 from .models import Device
 
+DEFAULT_CACHE_FILE = Path.home() / ".cache" / "ha-automation" / "device_cache.json"
+
 
 class DeviceDiscovery:
     """Discover and search Home Assistant devices."""
 
-    def __init__(self, client: HAClient, cache_file: str = "device_cache.json"):
+    def __init__(self, client: HAClient, cache_file: Optional[Path] = None):
         """
         Initialize DeviceDiscovery.
 
@@ -19,7 +21,7 @@ class DeviceDiscovery:
             cache_file: Path to cache file for storing discovered devices
         """
         self.client = client
-        self.cache_file = Path(cache_file)
+        self.cache_file = cache_file or DEFAULT_CACHE_FILE
         self.devices: List[Device] = []
 
     def discover_all(self, force_refresh: bool = False) -> List[Device]:
@@ -195,6 +197,7 @@ class DeviceDiscovery:
     def _save_cache(self):
         """Save discovered devices to JSON cache file."""
         try:
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
             data = [device.model_dump() for device in self.devices]
             self.cache_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
         except Exception as e:

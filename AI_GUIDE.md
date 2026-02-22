@@ -27,7 +27,7 @@ This toolkit helps AI assistants (like Claude Code, GitHub Copilot, etc.) create
 
 ### Use Fixed IDs for Sync Workflows
 
-**Key Principle**: For scripts in `my_automations/`, ALWAYS use fixed, descriptive IDs.
+**Key Principle**: For scripts in `~/.config/ha-automation/automations/`, ALWAYS use fixed, descriptive IDs.
 
 **Why:**
 - ✅ `ha-automation sync` will update existing automations instead of creating duplicates
@@ -63,16 +63,16 @@ manager.create_automation(automation_config)  # Creates duplicate on each run
 ```
 
 **When to use each method:**
-- `manager.create_or_update(config)` - **Recommended** for `my_automations/` scripts (idempotent)
+- `manager.create_or_update(config)` - **Recommended** for `~/.config/ha-automation/automations/` scripts (idempotent)
 - `manager.create_automation(config)` - Only for one-off creations or when you specifically want a new instance
 - `manager.update_automation(id, config)` - Only when you know automation exists and want to update it
 
 ### File Organization
 
-- ✅ **User's personal automations** → `my_automations/` directory
+- ✅ **User's personal automations** → `~/.config/ha-automation/automations/` directory (default)
   - Device-specific configurations
   - Contains personal information (entity IDs)
-  - Gitignored by default
+  - Override with `HA_AUTOMATION_SCRIPTS_DIR` env var or `--directory` CLI flag
 
 - ✅ **General examples** → `examples/` directory
   - Teaching examples
@@ -99,7 +99,7 @@ The AI assistant:
 ```python
 from ha_automation import HAClient, DeviceDiscovery, AutomationManager
 
-# Initialize (automatically loads from .env file)
+# Initialize (automatically loads from ~/.config/ha-automation/config)
 client = HAClient()  # Reads HA_URL and HA_TOKEN from environment
 discovery = DeviceDiscovery(client)
 manager = AutomationManager(client)
@@ -559,7 +559,7 @@ Parameters:
 5. **Validate** - Check that required devices exist before creating automation
 6. **Use descriptive names** - Set `alias` to clearly describe what automation does
 7. **Add descriptions** - Use `description` field to explain automation in user's language
-8. **Use create_or_update()** - Call `manager.create_or_update(config)` for idempotent operations (recommended for `my_automations/` scripts)
+8. **Use create_or_update()** - Call `manager.create_or_update(config)` for idempotent operations (recommended for `~/.config/ha-automation/automations/` scripts)
 9. **Verify creation** - After creation, verify with `manager.get_automation()`
 10. **Handle errors gracefully** - Catch exceptions and provide clear error messages
 
@@ -705,13 +705,14 @@ ha-automation devices --type light
 ha-automation devices --area "Living Room"
 ha-automation devices --json  # JSON output
 
-# Sync all automation scripts in my_automations/ (Recommended!)
+# Sync all automation scripts in ~/.config/ha-automation/automations/ (Recommended!)
 ha-automation sync                    # Run all scripts to create/update automations
 ha-automation sync --dry-run         # Preview changes without applying
 ha-automation sync --clean           # Also remove orphaned automations
+ha-automation sync --directory /path/to/scripts  # Use custom directory
 
 # Run a single automation script (API-based)
-ha-automation run my_automations/door_unlock_lights.py
+ha-automation run ~/.config/ha-automation/automations/door_unlock_lights.py
 
 # Create automations from templates (Interactive, API-based)
 ha-automation create-from-template motion-light
