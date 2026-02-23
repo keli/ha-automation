@@ -216,16 +216,28 @@ def show(entity_id: str, output_json: bool):
         raise click.Abort()
 
 
+def _resolve_entity_id(manager, entity_id: str) -> str:
+    """Resolve automation_id or entity_id to a full entity_id."""
+    if not entity_id.startswith("automation."):
+        resolved = manager._find_automation_by_id(entity_id)
+        if resolved:
+            return resolved
+        # Fallback: treat as bare id and prefix
+        return f"automation.{entity_id}"
+    return entity_id
+
+
 @main.command()
 @click.argument('entity_id')
 def enable(entity_id: str):
-    """Enable an automation."""
+    """Enable an automation (accepts entity_id or automation_id)."""
     manager = get_manager()
 
     try:
         with console.status(f"[blue]Enabling {entity_id}..."):
-            manager.turn_on_automation(entity_id)
-        console.print(f"[green]✓[/green] Automation enabled: {entity_id}")
+            resolved = _resolve_entity_id(manager, entity_id)
+            manager.turn_on_automation(resolved)
+        console.print(f"[green]✓[/green] Automation enabled: {resolved}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
@@ -234,13 +246,14 @@ def enable(entity_id: str):
 @main.command()
 @click.argument('entity_id')
 def disable(entity_id: str):
-    """Disable an automation."""
+    """Disable an automation (accepts entity_id or automation_id)."""
     manager = get_manager()
 
     try:
         with console.status(f"[blue]Disabling {entity_id}..."):
-            manager.turn_off_automation(entity_id)
-        console.print(f"[green]✓[/green] Automation disabled: {entity_id}")
+            resolved = _resolve_entity_id(manager, entity_id)
+            manager.turn_off_automation(resolved)
+        console.print(f"[green]✓[/green] Automation disabled: {resolved}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
@@ -249,13 +262,14 @@ def disable(entity_id: str):
 @main.command()
 @click.argument('entity_id')
 def toggle(entity_id: str):
-    """Toggle an automation on/off."""
+    """Toggle an automation on/off (accepts entity_id or automation_id)."""
     manager = get_manager()
 
     try:
         with console.status(f"[blue]Toggling {entity_id}..."):
-            manager.toggle_automation(entity_id)
-        console.print(f"[green]✓[/green] Automation toggled: {entity_id}")
+            resolved = _resolve_entity_id(manager, entity_id)
+            manager.toggle_automation(resolved)
+        console.print(f"[green]✓[/green] Automation toggled: {resolved}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
@@ -266,13 +280,14 @@ def toggle(entity_id: str):
 @click.option('--skip-condition', is_flag=True,
               help='Skip condition checks when triggering')
 def trigger(entity_id: str, skip_condition: bool):
-    """Manually trigger an automation."""
+    """Manually trigger an automation (accepts entity_id or automation_id)."""
     manager = get_manager()
 
     try:
         with console.status(f"[blue]Triggering {entity_id}..."):
-            manager.trigger_automation(entity_id, skip_condition=skip_condition)
-        console.print(f"[green]✓[/green] Automation triggered: {entity_id}")
+            resolved = _resolve_entity_id(manager, entity_id)
+            manager.trigger_automation(resolved, skip_condition=skip_condition)
+        console.print(f"[green]✓[/green] Automation triggered: {resolved}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
@@ -758,10 +773,12 @@ def scripts(directory: Optional[str]):
     for script in script_files:
         try:
             content = script.read_text(encoding='utf-8')
-            id_match = re.search(r'"id"\s*:\s*"([^"]+)"', content)
-            alias_match = re.search(r'"alias"\s*:\s*"([^"]+)"', content)
-            auto_id = id_match.group(1) if id_match else "—"
-            alias = alias_match.group(1) if alias_match else "—"
+            auto_ids = re.findall(r'(?:"id"|automation_id)\s*[=:]\s*"([^"]+)"', content)
+            alias_matches = re.findall(r'[,\n]\s*alias\s*=\s*"([^"]+)"', content)
+            dict_alias = re.search(r'"alias"\s*:\s*"([^"]+)"', content)
+            all_aliases = alias_matches if alias_matches else ([dict_alias.group(1)] if dict_alias else [])
+            auto_id = "\n".join(auto_ids) if auto_ids else "—"
+            alias = "\n".join(all_aliases) if all_aliases else "—"
         except Exception:
             auto_id = alias = "—"
 
