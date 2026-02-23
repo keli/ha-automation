@@ -684,6 +684,52 @@ def update(automation_id):
         raise click.Abort()
 
 
+@main.command('scripts')
+@click.option('--directory', '-d', default=None,
+              help='Directory containing automation scripts. '
+                   'Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.config/ha-automation/automations')
+def scripts(directory: Optional[str]):
+    """List local automation scripts."""
+    import re
+
+    scripts_dir = resolve_scripts_dir(directory)
+
+    if not scripts_dir.exists():
+        console.print(f"[red]Directory not found:[/red] {scripts_dir}")
+        console.print(
+            f"[bright_black]Tip:[/bright_black] Create it or set {SCRIPTS_DIR_ENV_VAR} to an existing path."
+        )
+        raise click.Abort()
+
+    script_files = sorted(scripts_dir.glob('*.py'))
+
+    if not script_files:
+        console.print(f"[dark_orange]No Python scripts found in {scripts_dir}[/dark_orange]")
+        return
+
+    table = Table(title=f"Local Automation Scripts ({scripts_dir})", box=box.ROUNDED)
+    table.add_column("File", style="blue", no_wrap=True)
+    table.add_column("Automation ID", style="magenta")
+    table.add_column("Alias", style="black")
+    table.add_column("Size", justify="right", style="dim")
+
+    for script in script_files:
+        try:
+            content = script.read_text(encoding='utf-8')
+            id_match = re.search(r'"id"\s*:\s*"([^"]+)"', content)
+            alias_match = re.search(r'"alias"\s*:\s*"([^"]+)"', content)
+            auto_id = id_match.group(1) if id_match else "—"
+            alias = alias_match.group(1) if alias_match else "—"
+        except Exception:
+            auto_id = alias = "—"
+
+        size = f"{script.stat().st_size / 1024:.1f}K"
+        table.add_row(script.name, auto_id, alias, size)
+
+    console.print(table)
+    console.print(f"\n[bright_black]Total: {len(script_files)} script(s)[/bright_black]")
+
+
 @main.command('sync')
 @click.option('--directory', '-d', default=None,
               help='Directory containing automation scripts. '
