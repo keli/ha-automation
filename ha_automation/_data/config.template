@@ -1,0 +1,7 @@
+# Home Assistant connection settings
+# This file is specific to this workspace (one HA instance per workspace).
+# It overrides ~/.config/ha-automation/config if that global config exists.
+# DO NOT commit this file — it contains your access token.
+
+HA_URL=http://192.168.1.100:8123
+HA_TOKEN=your_long_lived_access_token_here

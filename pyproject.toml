@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
+dynamic = ["version"]
 name = "ha-automation"
-version = "1.0.0"
 description = "Python CLI and library for managing Home Assistant automations"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -39,3 +39,11 @@ Issues = "https://github.com/yourusername/ha-automation/issues"
 
 [tool.setuptools]
 packages = ["ha_automation"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+ha_automation = ["_data/*"]
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+version_scheme = "post-release"

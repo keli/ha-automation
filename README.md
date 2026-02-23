@@ -368,7 +368,7 @@ manager = AutomationManager(client)
 ## Documentation
 
 - **[README.md](README.md)** - Overview and quick start (this file)
-- **[AI_GUIDE.md](AI_GUIDE.md)** - ⭐ **Complete guide for AI assistants with API workflow**
+- **[AGENTS.md](AGENTS.md)** - ⭐ **Complete guide for AI assistants with API workflow**
 
 ## Project Structure
 
@@ -379,7 +379,7 @@ ha-automation/
 ├── requirements.txt              # Python dependencies
 ├── pyproject.toml               # Package configuration
 ├── README.md                     # This file
-├── AI_GUIDE.md                   # Guide for AI assistants
+├── AGENTS.md                   # Guide for AI assistants
 ├── ha_automation/
 │   ├── __init__.py              # Package exports
 │   ├── client.py                # Home Assistant API client wrapper
@@ -432,7 +432,7 @@ ha-automation run ~/.config/ha-automation/automations/door_unlock_lights.py
 
 This toolkit is designed to be used by AI assistants to help users create and manage Home Assistant automations from natural language descriptions. 
 
-**See [AI_GUIDE.md](AI_GUIDE.md)** for comprehensive documentation including:
+**See [AGENTS.md](AGENTS.md)** for comprehensive documentation including:
 - Quick start guide for AI assistants
 - Common automation patterns with code examples
 - Home Assistant trigger/condition/action reference

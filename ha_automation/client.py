@@ -21,10 +21,10 @@ class HAClient:
             token: Long-lived access token
                    If not provided, loads from HA_TOKEN environment variable
         """
-        # Load environment variables: XDG config dir first, then cwd (cwd overrides)
+        # Load config: XDG global first, then workspace .ha-config (overrides)
         xdg_config = Path.home() / ".config" / "ha-automation" / "config"
         load_dotenv(xdg_config)
-        load_dotenv(override=True)
+        load_dotenv(Path.cwd() / ".ha-config", override=True)
 
         # Use provided values or fall back to environment variables
         self.url = url or os.getenv("HA_URL")
