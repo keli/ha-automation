@@ -1,92 +1,92 @@
 # AI Assistant Guide for Home Assistant Automation Toolkit
 
-## 关键规则
+## Key Rules
 
-### 1. 始终通过 toolkit API 操作，不要绕开
+### 1. Always use the toolkit API
 
 ```python
 from ha_automation import HAClient, DeviceDiscovery, AutomationManager
 
-client = HAClient()       # 自动读取 ~/.config/ha-automation/config
+client = HAClient()       # reads ~/.config/ha-automation/config automatically
 discovery = DeviceDiscovery(client)
 manager = AutomationManager(client)
 ```
 
-- ✅ 用 `HAClient` 查询设备状态、日志等
-- ✅ 用 `manager.create_or_update(config)` 创建/更新自动化
-- ❌ 不要手写 `requests` / `curl` 直接调 HA REST API
-- ❌ 不要生成 YAML 让用户手动粘贴
+- Use `HAClient` to query device states, logs, etc.
+- Use `manager.create_or_update(config)` to create/update automations (idempotent)
+- Do NOT use raw `requests` / `curl` to call HA REST API directly
+- Do NOT generate YAML for the user to paste manually
 
-### 2. 使用固定 ID（不要时间戳）
+### 2. Use stable IDs (no timestamps)
 
 ```python
-# ✅ 正确
+# Correct
 {"id": "night_hallway_light", ...}
-manager.create_or_update(config)   # 幂等，重复运行不会创建重复
+manager.create_or_update(config)   # idempotent, safe to re-run
 
-# ❌ 错误
-{"id": f"automation_{int(time.time())}", ...}  # 每次创建新的
+# Wrong
+{"id": f"automation_{int(time.time())}", ...}  # creates duplicates every run
 ```
 
-### 3. 文件位置
+### 3. File locations
 
-- 个人自动化脚本 → 本项目的 `automations/` 目录（IDE 里直接可见）
-- HA 连接配置 → 本项目根目录的 `.ha-config`（含 token，已 gitignore，**不要读取或修改**）
+- Automation scripts → `automations/` directory in this project
+- HA connection config → `.ha-config` in project root (contains token, gitignored — **do not read or modify**)
 
-`ha-automation sync` 会自动检测当前目录下的 `automations/` 子目录。
+`ha-automation sync` auto-detects the `automations/` subdirectory under the current directory.
 
 ---
 
-## 标准工作流
+## Standard Workflow
 
 ```python
-# 1. 发现设备
+# 1. Discover devices
 devices = discovery.discover_all()
 lights = discovery.get_lights()
 sensors = discovery.get_motion_sensors()
-results = discovery.search("走廊")          # 支持中英文
+results = discovery.search("hallway")
 by_domain = discovery.get_by_domain('switch')
 by_area = discovery.get_by_area("Living Room")
 
-# 2. 构建配置（固定 ID）
+# 2. Build config (stable ID)
 config = {
-    "id": "my_automation",          # 固定 ID
-    "alias": "自动化名称",
-    "description": "描述",
+    "id": "my_automation",
+    "alias": "Automation name",
+    "description": "Description",
     "trigger": [...],
-    "condition": [...],             # 可选
+    "condition": [...],   # optional
     "action": [...],
-    "mode": "single"                # single / restart / queued / parallel
+    "mode": "single"      # single / restart / queued / parallel
 }
 
-# 3. 创建/更新
+# 3. Create or update
 automation_id, was_created = manager.create_or_update(config)
-print(f"{'创建' if was_created else '更新'}: automation.{automation_id}")
+print(f"{'Created' if was_created else 'Updated'}: automation.{automation_id}")
 ```
 
 ---
 
-## HA 配置速查
+## HA Config Reference
 
 ### Trigger
 
 ```python
-# 实体状态变化
+# State change
 {"platform": "state", "entity_id": "...", "to": "on", "from": "off", "for": "00:05:00"}
 
-# 定时
+# Time
 {"platform": "time", "at": "22:00:00"}
 
-# 数值阈值
+# Numeric threshold
 {"platform": "numeric_state", "entity_id": "...", "above": 26, "below": 20}
 
-# 模板
+# Template
 {"platform": "template", "value_template": "{{ states('sensor.temp') | float > 25 }}"}
 
-# 日出日落
+# Sun
 {"platform": "sun", "event": "sunset", "offset": "-00:30:00"}
 
-# event 域实体（小米无线开关等）用 state trigger，不要用 event trigger
+# event-domain entities (e.g. Xiaomi wireless buttons): use state trigger, NOT event trigger
 {"platform": "state", "entity_id": "event.xiaomi_xxx_click"}
 ```
 
@@ -103,52 +103,48 @@ print(f"{'创建' if was_created else '更新'}: automation.{automation_id}")
 ### Action
 
 ```python
-# 服务调用
+# Service calls
 {"service": "light.turn_on", "target": {"entity_id": "light.xxx"}, "data": {"brightness_pct": 80}}
 {"service": "switch.turn_off", "target": {"entity_id": ["switch.a", "switch.b"]}}
-{"service": "notify.notify", "data": {"message": "消息", "title": "标题"}}
+{"service": "notify.notify", "data": {"message": "...", "title": "..."}}
 {"service": "climate.set_temperature", "target": {"entity_id": "..."}, "data": {"temperature": 24}}
 
-# 延时
+# Delay
 {"delay": "00:05:00"}
 
-# 条件分支
+# Conditional branch
 {"choose": [{"conditions": [...], "sequence": [...]}], "default": [...]}
 ```
 
 ---
 
-## CLI 常用命令
+## CLI Commands
 
 ```bash
-# 本地脚本管理
-ha-automation scripts                        # 列出本地脚本及启用状态
-ha-automation script-disable <script>        # 禁用脚本（sync 时跳过）
-ha-automation script-enable <script>         # 启用脚本
-ha-automation run <script>                   # 单独运行一个脚本
+ha-automation scripts                        # list local scripts and their enabled state
+ha-automation script-disable <script>        # disable a script (skipped during sync)
+ha-automation script-enable <script>         # enable a script
+ha-automation run <script>                   # run a single script
 
-# 同步
-ha-automation sync                           # 同步所有已启用脚本到 HA
-ha-automation sync --dry-run                 # 预览变更
+ha-automation sync                           # sync all enabled scripts to HA
+ha-automation sync --dry-run                 # preview changes
 
-# 设备
-ha-automation discover                       # 发现并缓存设备
-ha-automation devices "关键词"               # 搜索设备
+ha-automation discover                       # discover and cache devices
+ha-automation devices "<keyword>"            # search devices
 
-# HA 自动化管理
-ha-automation list                           # 列出所有自动化
-ha-automation show automation.xxx            # 查看详情
-ha-automation trigger automation.xxx         # 手动触发
-ha-automation enable/disable automation.xxx  # 启用/禁用
-ha-automation delete <id>                    # 删除
-ha-automation reload                         # 重载所有自动化
-ha-automation test                           # 测试连接
+ha-automation list                           # list all automations
+ha-automation show automation.xxx            # show details
+ha-automation trigger automation.xxx         # manually trigger
+ha-automation enable/disable automation.xxx  # enable/disable
+ha-automation delete <id>                    # delete
+ha-automation reload                         # reload all automations
+ha-automation test                           # test connection
 ```
 
 ---
 
-## 注意事项
+## Notes
 
-- **小米 event 域实体**（无线开关）：触发器用 `platform: state`，不要用 `platform: event` + `event_type: xiaomi_home_event`
-- 查询 HA 状态时用 `client.get_states(entity_id="...")` 而不是 bash + requests
-- 设备名有歧义时直接硬编码 entity_id 并注释说明用途
+- **Xiaomi event-domain entities** (wireless buttons): use `platform: state`, NOT `platform: event` with `event_type: xiaomi_home_event`
+- Query HA state with `client.get_states(entity_id="...")`, not bash + requests
+- When device names are ambiguous, hardcode the `entity_id` directly with a comment explaining its purpose
