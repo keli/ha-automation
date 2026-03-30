@@ -30,8 +30,8 @@ manager.create_or_update(config)   # 幂等，重复运行不会创建重复
 
 ### 3. 文件位置
 
-- 个人自动化脚本 → 本项目的 `automations/` 目录（IDE 里直接可见）
-- HA 连接配置 → 本项目根目录的 `.ha-config`（含 token，已 gitignore，**不要读取或修改**）
+- 个人自动化脚本 -> 本项目的 `automations/` 目录（IDE 里直接可见）
+- HA 连接配置 -> 本项目根目录的 `.ha-config`（含 token，已 gitignore，**不要读取或修改**）
 
 `ha-automation sync` 会自动检测当前目录下的 `automations/` 子目录。
 
@@ -77,8 +77,8 @@ print(f"{'创建' if was_created else '更新'}: automation.{automation_id}")
 
 执行脚本改动前的最小确认流程（不可省略）：
 
-1. 用 `ha-automation devices "关键词"` 找到候选实体  
-2. 用 `client.get_states(entity_id="...")` 确认状态值和属性语义  
+1. 用 `ha-automation devices "关键词"` 找到候选实体
+2. 用 `client.get_states(entity_id="...")` 确认状态值和属性语义
 3. 和用户需求对齐后再实现 trigger/condition/action
 
 ---

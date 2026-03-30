@@ -1277,7 +1277,13 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
 
 @main.command("init")
 @click.argument("directory", default="ha-automations", required=False)
-def init(directory: str):
+@click.option(
+    "--lang",
+    type=click.Choice(["zh", "en"], case_sensitive=False),
+    default=None,
+    help="Language for generated AGENTS.md (zh or en).",
+)
+def init(directory: str, lang: Optional[str]):
     """
     Initialize a new automation workspace.
 
@@ -1286,6 +1292,7 @@ def init(directory: str):
 
     Examples:
         ha-automation init                    # creates ./ha-automations/
+        ha-automation init --lang en         # initialize with English AGENTS.md
         ha-automation init .                  # initialize current directory
         ha-automation init ~/my-automations   # initialize a custom directory
     """
@@ -1320,8 +1327,26 @@ def init(directory: str):
         except Exception as e:
             console.print(f"[red]Error copying {src_name}:[/red] {e}")
 
-    # Copy AGENTS.md into workspace root (for Claude Code)
-    _copy("AGENTS.md", target / "AGENTS.md")
+    if lang:
+        selected_lang = lang.lower()
+    else:
+        selected_lang = click.prompt(
+            "AGENTS.md language",
+            type=click.Choice(["zh", "en"], case_sensitive=False),
+            default="zh",
+            show_choices=True,
+        ).lower()
+
+    language_templates = {
+        "zh": "AGENTS.zh-CN.md",
+        "en": "AGENTS.en.md",
+    }
+    selected_agents_template = language_templates.get(selected_lang, "AGENTS.zh-CN.md")
+    if not (data_path / selected_agents_template).exists():
+        selected_agents_template = "AGENTS.md"
+
+    # Copy selected AGENTS template into workspace root
+    _copy(selected_agents_template, target / "AGENTS.md")
 
     # Copy example script into workspace automations/ subdir
     automations_dir.mkdir(parents=True, exist_ok=True)

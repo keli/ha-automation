@@ -31,6 +31,7 @@ Once installed, the `ha-automation` CLI command will be available globally.
 ```bash
 # Initialize a new workspace
 ha-automation init
+ha-automation init --lang en
 
 # Follow the prompts to configure your HA URL and token,
 # then sync your scripts to Home Assistant
@@ -59,6 +60,7 @@ HA_TOKEN=your_long_lived_access_token
 ```bash
 # Initialize a new automation workspace
 ha-automation init [directory]
+ha-automation init [directory] --lang [zh|en]
 
 # Test connection to Home Assistant
 ha-automation test
