@@ -1,20 +1,20 @@
 """Command-line interface for Home Assistant automation management."""
 
-import click
 import json
 import os
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .client import HAClient
-from .automation_manager import AutomationManager
-from .device_discovery import DeviceDiscovery
+import click
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
+from .automation_manager import AutomationManager
+from .client import HAClient
+from .device_discovery import DeviceDiscovery
 
 console = Console()
 DEFAULT_SCRIPTS_DIR = Path.home() / ".config" / "ha-automation" / "automations"
@@ -34,7 +34,9 @@ def _load_scripts_json(scripts_dir: Path) -> dict:
 
 def _save_scripts_json(scripts_dir: Path, data: dict):
     path = _scripts_json_path(scripts_dir)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def _sync_scripts_json(scripts_dir: Path) -> dict:
@@ -48,6 +50,26 @@ def _sync_scripts_json(scripts_dir: Path) -> dict:
     if changed:
         _save_scripts_json(scripts_dir, data)
     return data
+
+
+def _extract_automation_ids_from_script(script: Path) -> list[str]:
+    """Extract automation IDs from a script file."""
+    import re
+
+    content = script.read_text(encoding="utf-8")
+
+    matches = []
+    matches.extend(re.findall(r'["\']id["\']\s*:\s*["\']([^"\']+)["\']', content))
+    matches.extend(re.findall(r'automation_id\s*=\s*["\']([^"\']+)["\']', content))
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_ids = []
+    for automation_id in matches:
+        if automation_id not in seen:
+            seen.add(automation_id)
+            unique_ids.append(automation_id)
+    return unique_ids
 
 
 def get_manager() -> AutomationManager:
@@ -112,10 +134,12 @@ def main():
 
 
 @main.command()
-@click.option('--state', type=click.Choice(['on', 'off'], case_sensitive=False),
-              help='Filter by state')
-@click.option('--json', 'output_json', is_flag=True,
-              help='Output as JSON')
+@click.option(
+    "--state",
+    type=click.Choice(["on", "off"], case_sensitive=False),
+    help="Filter by state",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def list(state: Optional[str], output_json: bool):
     """List all automations."""
     manager = get_manager()
@@ -130,9 +154,11 @@ def list(state: Optional[str], output_json: bool):
                     "entity_id": auto.entity_id,
                     "state": auto.state,
                     "friendly_name": auto.friendly_name,
-                    "last_triggered": auto.last_triggered.isoformat() if auto.last_triggered else None,
+                    "last_triggered": auto.last_triggered.isoformat()
+                    if auto.last_triggered
+                    else None,
                     "mode": auto.mode,
-                    "current": auto.current
+                    "current": auto.current,
                 }
                 for auto in automations
             ]
@@ -147,17 +173,21 @@ def list(state: Optional[str], output_json: bool):
             table.add_column("Last Triggered", style="dim")
 
             for auto in automations:
-                state_style = "[green]ON[/green]" if auto.state == "on" else "[red]OFF[/red]"
+                state_style = (
+                    "[green]ON[/green]" if auto.state == "on" else "[red]OFF[/red]"
+                )
                 table.add_row(
                     auto.entity_id,
                     auto.friendly_name or "—",
                     state_style,
                     auto.mode,
-                    format_datetime(auto.last_triggered)
+                    format_datetime(auto.last_triggered),
                 )
 
             console.print(table)
-            console.print(f"\n[bright_black]Total: {len(automations)} automation(s)[/bright_black]")
+            console.print(
+                f"\n[bright_black]Total: {len(automations)} automation(s)[/bright_black]"
+            )
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -165,9 +195,8 @@ def list(state: Optional[str], output_json: bool):
 
 
 @main.command()
-@click.argument('entity_id')
-@click.option('--json', 'output_json', is_flag=True,
-              help='Output as JSON')
+@click.argument("entity_id")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def show(entity_id: str, output_json: bool):
     """Show details of a specific automation."""
     manager = get_manager()
@@ -181,11 +210,13 @@ def show(entity_id: str, output_json: bool):
                 "entity_id": automation.entity_id,
                 "state": automation.state,
                 "friendly_name": automation.friendly_name,
-                "last_triggered": automation.last_triggered.isoformat() if automation.last_triggered else None,
+                "last_triggered": automation.last_triggered.isoformat()
+                if automation.last_triggered
+                else None,
                 "mode": automation.mode,
                 "current": automation.current,
                 "max": automation.max,
-                "automation_id": automation.automation_id
+                "automation_id": automation.automation_id,
             }
             console.print(json.dumps(output, indent=2))
         else:
@@ -195,17 +226,21 @@ def show(entity_id: str, output_json: bool):
 
             info = f"""
 [blue]Entity ID:[/blue] {automation.entity_id}
-[blue]Name:[/blue] {automation.friendly_name or '—'}
+[blue]Name:[/blue] {automation.friendly_name or "—"}
 [blue]State:[/blue] {state_text}
 [blue]Mode:[/blue] {automation.mode}
 [blue]Current Runs:[/blue] {automation.current}
-[blue]Max Runs:[/blue] {automation.max or 'N/A'}
+[blue]Max Runs:[/blue] {automation.max or "N/A"}
 [blue]Last Triggered:[/blue] {format_datetime(automation.last_triggered)}
-[blue]Automation ID:[/blue] {automation.automation_id or 'N/A'}
+[blue]Automation ID:[/blue] {automation.automation_id or "N/A"}
             """.strip()
 
-            panel = Panel(info, title=f"Automation: {automation.friendly_name or entity_id}",
-                         border_style=state_color, box=box.ROUNDED)
+            panel = Panel(
+                info,
+                title=f"Automation: {automation.friendly_name or entity_id}",
+                border_style=state_color,
+                box=box.ROUNDED,
+            )
             console.print(panel)
 
     except ValueError as e:
@@ -228,7 +263,7 @@ def _resolve_entity_id(manager, entity_id: str) -> str:
 
 
 @main.command()
-@click.argument('entity_id')
+@click.argument("entity_id")
 def enable(entity_id: str):
     """Enable an automation (accepts entity_id or automation_id)."""
     manager = get_manager()
@@ -244,7 +279,7 @@ def enable(entity_id: str):
 
 
 @main.command()
-@click.argument('entity_id')
+@click.argument("entity_id")
 def disable(entity_id: str):
     """Disable an automation (accepts entity_id or automation_id)."""
     manager = get_manager()
@@ -260,7 +295,7 @@ def disable(entity_id: str):
 
 
 @main.command()
-@click.argument('entity_id')
+@click.argument("entity_id")
 def toggle(entity_id: str):
     """Toggle an automation on/off (accepts entity_id or automation_id)."""
     manager = get_manager()
@@ -276,9 +311,10 @@ def toggle(entity_id: str):
 
 
 @main.command()
-@click.argument('entity_id')
-@click.option('--skip-condition', is_flag=True,
-              help='Skip condition checks when triggering')
+@click.argument("entity_id")
+@click.option(
+    "--skip-condition", is_flag=True, help="Skip condition checks when triggering"
+)
 def trigger(entity_id: str, skip_condition: bool):
     """Manually trigger an automation (accepts entity_id or automation_id)."""
     manager = get_manager()
@@ -294,9 +330,8 @@ def trigger(entity_id: str, skip_condition: bool):
 
 
 @main.command()
-@click.argument('automation_id')
-@click.option('--force', is_flag=True,
-              help='Skip confirmation prompt')
+@click.argument("automation_id")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
 def delete(automation_id: str, force: bool):
     """
     Delete an automation.
@@ -307,7 +342,9 @@ def delete(automation_id: str, force: bool):
     manager = get_manager()
 
     if not force:
-        if not click.confirm(f"Are you sure you want to delete automation '{automation_id}'?"):
+        if not click.confirm(
+            f"Are you sure you want to delete automation '{automation_id}'?"
+        ):
             console.print("[dark_orange]Deletion cancelled.[/dark_orange]")
             return
 
@@ -315,7 +352,9 @@ def delete(automation_id: str, force: bool):
         with console.status(f"[blue]Deleting automation {automation_id}..."):
             manager.delete_automation(automation_id)
         console.print(f"[green]✓[/green] Automation deleted: {automation_id}")
-        console.print("[dark_orange]Note:[/dark_orange] Run 'reload' command to refresh automations")
+        console.print(
+            "[dark_orange]Note:[/dark_orange] Run 'reload' command to refresh automations"
+        )
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
@@ -350,7 +389,9 @@ def test():
             config = client.get_config()
 
         console.print(f"[green]✓[/green] Connected successfully!")
-        console.print(f"[blue]Location:[/blue] {config.get('location_name', 'Unknown')}")
+        console.print(
+            f"[blue]Location:[/blue] {config.get('location_name', 'Unknown')}"
+        )
         console.print(f"[blue]Version:[/blue] {config.get('version', 'Unknown')}")
         console.print(f"[blue]Host:[/blue] {client.host}:{client.port}")
 
@@ -360,7 +401,11 @@ def test():
 
 
 @main.command()
-@click.option('--no-refresh', is_flag=True, help='Use cached data instead of refreshing from Home Assistant')
+@click.option(
+    "--no-refresh",
+    is_flag=True,
+    help="Use cached data instead of refreshing from Home Assistant",
+)
 def discover(no_refresh: bool):
     """Discover and cache all devices from Home Assistant."""
     try:
@@ -389,12 +434,25 @@ def discover(no_refresh: bool):
 
 
 @main.command()
-@click.argument('query', required=False)
-@click.option('--type', 'device_type', help='Filter by domain (light, sensor, switch, etc.)')
-@click.option('--area', help='Filter by area name')
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-@click.option('--limit', type=int, default=50, help='Maximum number of devices to display (default: 50)')
-def devices(query: Optional[str], device_type: Optional[str], area: Optional[str], output_json: bool, limit: int):
+@click.argument("query", required=False)
+@click.option(
+    "--type", "device_type", help="Filter by domain (light, sensor, switch, etc.)"
+)
+@click.option("--area", help="Filter by area name")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option(
+    "--limit",
+    type=int,
+    default=50,
+    help="Maximum number of devices to display (default: 50)",
+)
+def devices(
+    query: Optional[str],
+    device_type: Optional[str],
+    area: Optional[str],
+    output_json: bool,
+    limit: int,
+):
     """Search and list devices."""
     try:
         client = HAClient()
@@ -420,7 +478,7 @@ def devices(query: Optional[str], device_type: Optional[str], area: Optional[str
                     "domain": device.domain,
                     "state": device.state,
                     "device_class": device.device_class,
-                    "area": device.area
+                    "area": device.area,
                 }
                 for device in results[:limit]
             ]
@@ -440,24 +498,28 @@ def devices(query: Optional[str], device_type: Optional[str], area: Optional[str
                     device.friendly_name,
                     device.domain,
                     device.state,
-                    device.area or "—"
+                    device.area or "—",
                 )
 
             console.print(table)
 
             total = len(results)
             shown = min(total, limit)
-            console.print(f"\n[bright_black]Showing {shown} of {total} devices[/bright_black]")
+            console.print(
+                f"\n[bright_black]Showing {shown} of {total} devices[/bright_black]"
+            )
             if total > limit:
-                console.print(f"[bright_black]Use --limit {total} to see all results[/bright_black]")
+                console.print(
+                    f"[bright_black]Use --limit {total} to see all results[/bright_black]"
+                )
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
 
 
-@main.command('validate')
-@click.argument('yaml_file', type=click.Path(exists=True))
+@main.command("validate")
+@click.argument("yaml_file", type=click.Path(exists=True))
 def validate(yaml_file):
     """
     Validate automation YAML file.
@@ -471,7 +533,7 @@ def validate(yaml_file):
 
     try:
         # Read YAML file
-        with open(yaml_file, 'r', encoding='utf-8') as f:
+        with open(yaml_file, "r", encoding="utf-8") as f:
             data = yaml_lib.safe_load(f)
 
         # Handle both single automation and list
@@ -483,10 +545,10 @@ def validate(yaml_file):
         for i, config in enumerate(configs, 1):
             try:
                 manager.validate_config(config)
-                automation_name = config.get('alias', config.get('id', f'#{i}'))
+                automation_name = config.get("alias", config.get("id", f"#{i}"))
                 console.print(f"✓ [green]{automation_name}[/green] - Valid")
             except ValueError as e:
-                automation_name = config.get('alias', config.get('id', f'#{i}'))
+                automation_name = config.get("alias", config.get("id", f"#{i}"))
                 console.print(f"✗ [red]{automation_name}[/red] - {e}")
                 all_valid = False
 
@@ -502,8 +564,8 @@ def validate(yaml_file):
         raise click.Abort()
 
 
-@main.command('run')
-@click.argument('script_path', type=click.Path(exists=True))
+@main.command("run")
+@click.argument("script_path", type=click.Path(exists=True))
 def run(script_path):
     """
     Execute a Python automation script.
@@ -528,7 +590,7 @@ def run(script_path):
             [sys.executable, str(script)],
             capture_output=True,
             text=True,
-            cwd=script.parent
+            cwd=script.parent,
         )
 
         # Display output
@@ -549,10 +611,14 @@ def run(script_path):
         raise click.Abort()
 
 
-@main.command('create-from-template')
-@click.argument('template_name',
-                type=click.Choice(['motion-light', 'time-based', 'temperature-control',
-                                 'door-alert', 'auto-off'], case_sensitive=False))
+@main.command("create-from-template")
+@click.argument(
+    "template_name",
+    type=click.Choice(
+        ["motion-light", "time-based", "temperature-control", "door-alert", "auto-off"],
+        case_sensitive=False,
+    ),
+)
 def create_from_template(template_name):
     """
     Create automation from a pre-built template.
@@ -578,9 +644,11 @@ def create_from_template(template_name):
         with console.status("[blue]Discovering devices..."):
             discovery.discover_all()
 
-        console.print(f"\n[blue]Creating automation from template:[/blue] {template_name}\n")
+        console.print(
+            f"\n[blue]Creating automation from template:[/blue] {template_name}\n"
+        )
 
-        if template_name == 'motion-light':
+        if template_name == "motion-light":
             # Get motion sensors
             motion_sensors = discovery.get_motion_sensors()
             if not motion_sensors:
@@ -613,8 +681,12 @@ def create_from_template(template_name):
 
             # Get parameters
             brightness = click.prompt("Brightness (0-100)", type=int, default=30)
-            time_after = click.prompt("Active after time (HH:MM:SS)", default="22:00:00")
-            time_before = click.prompt("Active before time (HH:MM:SS)", default="06:00:00")
+            time_after = click.prompt(
+                "Active after time (HH:MM:SS)", default="22:00:00"
+            )
+            time_before = click.prompt(
+                "Active before time (HH:MM:SS)", default="06:00:00"
+            )
             name = click.prompt("Automation name", default="Motion Activated Light")
 
             # Build config
@@ -622,25 +694,27 @@ def create_from_template(template_name):
                 "id": f"motion_light_{int(time.time())}",
                 "alias": name,
                 "description": f"Turn on {lights[light_idx].friendly_name} when {motion_sensors[sensor_idx].friendly_name} detects motion",
-                "trigger": [{
-                    "platform": "state",
-                    "entity_id": motion_sensors[sensor_idx].entity_id,
-                    "to": "on"
-                }],
-                "condition": [{
-                    "condition": "time",
-                    "after": time_after,
-                    "before": time_before
-                }],
-                "action": [{
-                    "service": "light.turn_on",
-                    "target": {"entity_id": lights[light_idx].entity_id},
-                    "data": {"brightness_pct": brightness}
-                }],
-                "mode": "single"
+                "trigger": [
+                    {
+                        "platform": "state",
+                        "entity_id": motion_sensors[sensor_idx].entity_id,
+                        "to": "on",
+                    }
+                ],
+                "condition": [
+                    {"condition": "time", "after": time_after, "before": time_before}
+                ],
+                "action": [
+                    {
+                        "service": "light.turn_on",
+                        "target": {"entity_id": lights[light_idx].entity_id},
+                        "data": {"brightness_pct": brightness},
+                    }
+                ],
+                "mode": "single",
             }
 
-        elif template_name == 'time-based':
+        elif template_name == "time-based":
             # Get lights
             lights = discovery.get_lights()
             if not lights:
@@ -657,27 +731,32 @@ def create_from_template(template_name):
                 raise click.Abort()
 
             trigger_time = click.prompt("Trigger time (HH:MM:SS)", default="22:00:00")
-            action = click.prompt("Action", type=click.Choice(['turn_on', 'turn_off']), default='turn_off')
+            action = click.prompt(
+                "Action", type=click.Choice(["turn_on", "turn_off"]), default="turn_off"
+            )
             name = click.prompt("Automation name", default="Time Based Light Control")
 
             config = {
                 "id": f"time_based_{int(time.time())}",
                 "alias": name,
                 "description": f"{action.replace('_', ' ').title()} {lights[light_idx].friendly_name} at {trigger_time}",
-                "trigger": [{
-                    "platform": "time",
-                    "at": trigger_time
-                }],
-                "action": [{
-                    "service": f"light.{action}",
-                    "target": {"entity_id": lights[light_idx].entity_id}
-                }],
-                "mode": "single"
+                "trigger": [{"platform": "time", "at": trigger_time}],
+                "action": [
+                    {
+                        "service": f"light.{action}",
+                        "target": {"entity_id": lights[light_idx].entity_id},
+                    }
+                ],
+                "mode": "single",
             }
 
         else:
-            console.print(f"[dark_orange]Template '{template_name}' not yet implemented[/dark_orange]")
-            console.print("[bright_black]Coming soon: temperature-control, door-alert, auto-off[/bright_black]")
+            console.print(
+                f"[dark_orange]Template '{template_name}' not yet implemented[/dark_orange]"
+            )
+            console.print(
+                "[bright_black]Coming soon: temperature-control, door-alert, auto-off[/bright_black]"
+            )
             return
 
         # Create automation via API
@@ -695,8 +774,8 @@ def create_from_template(template_name):
         raise click.Abort()
 
 
-@main.command('update')
-@click.argument('automation_id')
+@main.command("update")
+@click.argument("automation_id")
 def update(automation_id):
     """
     Interactively update an existing automation.
@@ -710,7 +789,11 @@ def update(automation_id):
 
     try:
         # Get current automation
-        entity_id = automation_id if automation_id.startswith('automation.') else f"automation.{automation_id}"
+        entity_id = (
+            automation_id
+            if automation_id.startswith("automation.")
+            else f"automation.{automation_id}"
+        )
         auto = manager.get_automation(entity_id)
 
         console.print(f"\n[blue]Current automation:[/blue] {auto.friendly_name}")
@@ -719,15 +802,25 @@ def update(automation_id):
         console.print()
 
         # Get automation config
-        config_entity_id = auto.automation_id or automation_id.replace('automation.', '')
-        response = manager.client._request("GET", f"/api/config/automation/config/{config_entity_id}")
+        config_entity_id = auto.automation_id or automation_id.replace(
+            "automation.", ""
+        )
+        response = manager.client._request(
+            "GET", f"/api/config/automation/config/{config_entity_id}"
+        )
         current_config = response.json()
 
         console.print("[blue]Current configuration:[/blue]")
-        console.print(yaml_lib.dump(current_config, default_flow_style=False, allow_unicode=True))
+        console.print(
+            yaml_lib.dump(current_config, default_flow_style=False, allow_unicode=True)
+        )
 
-        console.print("\n[dark_orange]Note:[/dark_orange] Interactive editing not yet implemented.")
-        console.print("[bright_black]For now, use Python scripts with manager.update_automation()[/bright_black]")
+        console.print(
+            "\n[dark_orange]Note:[/dark_orange] Interactive editing not yet implemented."
+        )
+        console.print(
+            "[bright_black]For now, use Python scripts with manager.update_automation()[/bright_black]"
+        )
         console.print("\nExample:")
         console.print("  config = {current_config}")
         console.print("  config['alias'] = 'New Name'")
@@ -738,10 +831,14 @@ def update(automation_id):
         raise click.Abort()
 
 
-@main.command('scripts')
-@click.option('--directory', '-d', default=None,
-              help='Directory containing automation scripts. '
-                   'Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.config/ha-automation/automations')
+@main.command("scripts")
+@click.option(
+    "--directory",
+    "-d",
+    default=None,
+    help="Directory containing automation scripts. "
+    "Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.config/ha-automation/automations",
+)
 def scripts(directory: Optional[str]):
     """List local automation scripts."""
     import re
@@ -755,10 +852,12 @@ def scripts(directory: Optional[str]):
         )
         raise click.Abort()
 
-    script_files = sorted(scripts_dir.glob('*.py'))
+    script_files = sorted(scripts_dir.glob("*.py"))
 
     if not script_files:
-        console.print(f"[dark_orange]No Python scripts found in {scripts_dir}[/dark_orange]")
+        console.print(
+            f"[dark_orange]No Python scripts found in {scripts_dir}[/dark_orange]"
+        )
         return
 
     data = _sync_scripts_json(scripts_dir)
@@ -772,11 +871,15 @@ def scripts(directory: Optional[str]):
 
     for script in script_files:
         try:
-            content = script.read_text(encoding='utf-8')
+            content = script.read_text(encoding="utf-8")
             auto_ids = re.findall(r'(?:"id"|automation_id)\s*[=:]\s*"([^"]+)"', content)
             alias_matches = re.findall(r'[,\n]\s*alias\s*=\s*"([^"]+)"', content)
             dict_alias = re.search(r'"alias"\s*:\s*"([^"]+)"', content)
-            all_aliases = alias_matches if alias_matches else ([dict_alias.group(1)] if dict_alias else [])
+            all_aliases = (
+                alias_matches
+                if alias_matches
+                else ([dict_alias.group(1)] if dict_alias else [])
+            )
             auto_id = "\n".join(auto_ids) if auto_ids else "—"
             alias = "\n".join(all_aliases) if all_aliases else "—"
         except Exception:
@@ -788,36 +891,42 @@ def scripts(directory: Optional[str]):
         table.add_row(script.name, auto_id, alias, size, status)
 
     console.print(table)
-    console.print(f"\n[bright_black]Total: {len(script_files)} script(s)[/bright_black]")
+    console.print(
+        f"\n[bright_black]Total: {len(script_files)} script(s)[/bright_black]"
+    )
 
 
-@main.command('script-disable')
-@click.argument('script_name')
-@click.option('--directory', '-d', default=None,
-              help='Directory containing automation scripts.')
+@main.command("script-disable")
+@click.argument("script_name")
+@click.option(
+    "--directory", "-d", default=None, help="Directory containing automation scripts."
+)
 def script_disable(script_name: str, directory: Optional[str]):
     """Disable a script so it is skipped during sync."""
     scripts_dir = resolve_scripts_dir(directory)
-    if not script_name.endswith('.py'):
-        script_name += '.py'
+    if not script_name.endswith(".py"):
+        script_name += ".py"
     if not (scripts_dir / script_name).exists():
         console.print(f"[red]Script not found:[/red] {script_name}")
         raise click.Abort()
     data = _sync_scripts_json(scripts_dir)
     data[script_name]["enabled"] = False
     _save_scripts_json(scripts_dir, data)
-    console.print(f"[yellow]Disabled:[/yellow] {script_name} (will be skipped during sync)")
+    console.print(
+        f"[yellow]Disabled:[/yellow] {script_name} (will be skipped during sync)"
+    )
 
 
-@main.command('script-enable')
-@click.argument('script_name')
-@click.option('--directory', '-d', default=None,
-              help='Directory containing automation scripts.')
+@main.command("script-enable")
+@click.argument("script_name")
+@click.option(
+    "--directory", "-d", default=None, help="Directory containing automation scripts."
+)
 def script_enable(script_name: str, directory: Optional[str]):
     """Enable a script so it is included during sync."""
     scripts_dir = resolve_scripts_dir(directory)
-    if not script_name.endswith('.py'):
-        script_name += '.py'
+    if not script_name.endswith(".py"):
+        script_name += ".py"
     if not (scripts_dir / script_name).exists():
         console.print(f"[red]Script not found:[/red] {script_name}")
         raise click.Abort()
@@ -827,14 +936,22 @@ def script_enable(script_name: str, directory: Optional[str]):
     console.print(f"[green]Enabled:[/green] {script_name}")
 
 
-@main.command('sync')
-@click.option('--directory', '-d', default=None,
-              help='Directory containing automation scripts. '
-                   'Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.config/ha-automation/automations')
-@click.option('--dry-run', is_flag=True,
-              help='Show what would be done without making changes')
-@click.option('--clean', is_flag=True,
-              help='Remove automations from HA that no longer have corresponding scripts')
+@main.command("sync")
+@click.option(
+    "--directory",
+    "-d",
+    default=None,
+    help="Directory containing automation scripts. "
+    "Default: $HA_AUTOMATION_SCRIPTS_DIR or ~/.config/ha-automation/automations",
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be done without making changes"
+)
+@click.option(
+    "--clean",
+    is_flag=True,
+    help="Remove automations from HA that no longer have corresponding scripts",
+)
 def sync(directory: Optional[str], dry_run: bool, clean: bool):
     """
     Synchronize automation scripts with Home Assistant.
@@ -857,9 +974,9 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
         # Sync a different directory
         ha-automation sync --directory custom_automations
     """
+    import re
     import subprocess
     import sys
-    import re
 
     scripts_dir = resolve_scripts_dir(directory)
 
@@ -872,16 +989,27 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
 
     # Find all Python scripts, respecting enabled/disabled state
     scripts_data = _sync_scripts_json(scripts_dir)
-    all_script_files = sorted(scripts_dir.glob('*.py'))
-    script_files = [f for f in all_script_files if scripts_data.get(f.name, {}).get("enabled", True)]
+    all_script_files = sorted(scripts_dir.glob("*.py"))
+    script_files = [
+        f for f in all_script_files if scripts_data.get(f.name, {}).get("enabled", True)
+    ]
+    disabled_script_files = [
+        f
+        for f in all_script_files
+        if not scripts_data.get(f.name, {}).get("enabled", True)
+    ]
     skipped = len(all_script_files) - len(script_files)
 
     if not all_script_files:
-        console.print(f"[dark_orange]No Python scripts found in {scripts_dir}[/dark_orange]")
+        console.print(
+            f"[dark_orange]No Python scripts found in {scripts_dir}[/dark_orange]"
+        )
         return
 
     skip_note = f", [yellow]{skipped} disabled[/yellow]" if skipped else ""
-    console.print(f"\n[blue]Found {len(script_files)} script(s) to sync{skip_note} in {scripts_dir}[/blue]\n")
+    console.print(
+        f"\n[blue]Found {len(script_files)} script(s) to sync{skip_note} in {scripts_dir}[/blue]\n"
+    )
 
     # In dry-run mode, first get all existing automations
     automation_map = {}
@@ -889,9 +1017,15 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
         try:
             manager = get_manager()
             existing_automations = manager.list_automations()
-            automation_map = {auto.automation_id: auto for auto in existing_automations if auto.automation_id}
+            automation_map = {
+                auto.automation_id: auto
+                for auto in existing_automations
+                if auto.automation_id
+            }
         except Exception as e:
-            console.print(f"[dark_orange]Warning: Could not fetch existing automations: {e}[/dark_orange]\n")
+            console.print(
+                f"[dark_orange]Warning: Could not fetch existing automations: {e}[/dark_orange]\n"
+            )
 
     # Track results
     succeeded = []
@@ -903,30 +1037,38 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
         if dry_run:
             # Parse script to extract automation ID and alias
             try:
-                with open(script, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                # Look for "id": "..." pattern in the script
-                id_matches = re.findall(r'"id"\s*:\s*"([^"]+)"', content)
+                content = script.read_text(encoding="utf-8")
+                id_matches = _extract_automation_ids_from_script(script)
                 alias_matches = re.findall(r'"alias"\s*:\s*"([^"]+)"', content)
 
                 if id_matches:
-                    auto_id = id_matches[0]
                     auto_alias = alias_matches[0] if alias_matches else "Unknown"
-
-                    if auto_id in automation_map:
-                        # Automation exists - would be updated
-                        existing = automation_map[auto_id]
-                        state_style = "[green]ON[/green]" if existing.state == "on" else "[red]OFF[/red]"
-                        console.print(f"  [dark_orange]Would UPDATE:[/dark_orange] automation.{auto_id}")
-                        console.print(f"    Name: {auto_alias}")
-                        console.print(f"    Current: {existing.friendly_name} (State: {state_style})")
-                    else:
-                        # New automation - would be created
-                        console.print(f"  [green]Would CREATE:[/green] automation.{auto_id}")
-                        console.print(f"    Name: {auto_alias}")
+                    for auto_id in id_matches:
+                        if auto_id in automation_map:
+                            # Automation exists - would be updated
+                            existing = automation_map[auto_id]
+                            state_style = (
+                                "[green]ON[/green]"
+                                if existing.state == "on"
+                                else "[red]OFF[/red]"
+                            )
+                            console.print(
+                                f"  [dark_orange]Would UPDATE:[/dark_orange] automation.{auto_id}"
+                            )
+                            console.print(f"    Name: {auto_alias}")
+                            console.print(
+                                f"    Current: {existing.friendly_name} (State: {state_style})"
+                            )
+                        else:
+                            # New automation - would be created
+                            console.print(
+                                f"  [green]Would CREATE:[/green] automation.{auto_id}"
+                            )
+                            console.print(f"    Name: {auto_alias}")
                 else:
-                    console.print("  [bright_black]Could not extract automation ID from script[/bright_black]")
+                    console.print(
+                        "  [bright_black]Could not extract automation ID from script[/bright_black]"
+                    )
 
             except Exception as e:
                 console.print(f"  [red]✗[/red] Error parsing script: {e}")
@@ -942,21 +1084,23 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
                 capture_output=True,
                 text=True,
                 cwd=Path.cwd(),
-                timeout=30
+                timeout=30,
             )
 
             if result.returncode == 0:
                 console.print("  [green]✓[/green] Success")
                 # Show output from script
                 if result.stdout:
-                    for line in result.stdout.strip().split('\n'):
+                    for line in result.stdout.strip().split("\n"):
                         if line.strip():
                             console.print(f"    {line}")
                 succeeded.append(script.name)
             else:
                 console.print(f"  [red]✗[/red] Failed (exit code {result.returncode})")
                 if result.stderr:
-                    console.print(f"    [bright_black]{result.stderr[:200]}[/bright_black]")
+                    console.print(
+                        f"    [bright_black]{result.stderr[:200]}[/bright_black]"
+                    )
                 failed.append(script.name)
 
         except subprocess.TimeoutExpired:
@@ -968,11 +1112,103 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
 
         console.print()
 
+    # Turn off automations managed by disabled scripts
+    disabled_automation_ids = {}
+    for script in disabled_script_files:
+        for automation_id in _extract_automation_ids_from_script(script):
+            disabled_automation_ids.setdefault(automation_id, []).append(script.name)
+
+    disabled_ok = 0
+    disabled_failed = 0
+    disabled_missing = 0
+
+    if disabled_automation_ids:
+        console.print(
+            "[blue]Applying disabled script states to Home Assistant...[/blue]"
+        )
+
+        manager = None
+        if not dry_run:
+            try:
+                manager = get_manager()
+            except Exception as e:
+                console.print(f"  [red]✗[/red] Failed to initialize manager: {e}")
+                disabled_failed = len(disabled_automation_ids)
+
+        for automation_id, source_scripts in disabled_automation_ids.items():
+            source = ", ".join(source_scripts)
+            if dry_run:
+                existing = automation_map.get(automation_id)
+                if not existing:
+                    console.print(
+                        f"  [bright_black]Would disable:[/bright_black] automation.{automation_id} (not found, from {source})"
+                    )
+                    disabled_missing += 1
+                elif existing.state == "off":
+                    console.print(
+                        f"  [green]Already OFF:[/green] {existing.entity_id} (from {source})"
+                    )
+                    disabled_ok += 1
+                else:
+                    console.print(
+                        f"  [yellow]Would DISABLE:[/yellow] {existing.entity_id} (from {source})"
+                    )
+                    disabled_ok += 1
+                continue
+
+            if manager is None:
+                break
+
+            entity_id = (
+                manager._find_automation_by_id(automation_id)
+                or f"automation.{automation_id}"
+            )
+            try:
+                auto = manager.get_automation(entity_id)
+            except ValueError:
+                console.print(
+                    f"  [bright_black]Skipped:[/bright_black] automation.{automation_id} not found (from {source})"
+                )
+                disabled_missing += 1
+                continue
+            except Exception as e:
+                console.print(
+                    f"  [red]✗[/red] Failed to read automation.{automation_id}: {e}"
+                )
+                disabled_failed += 1
+                continue
+
+            if auto.state == "off":
+                console.print(
+                    f"  [green]Already OFF:[/green] {auto.entity_id} (from {source})"
+                )
+                disabled_ok += 1
+                continue
+
+            try:
+                manager.turn_off_automation(auto.entity_id)
+                console.print(
+                    f"  [yellow]Disabled:[/yellow] {auto.entity_id} (from {source})"
+                )
+                disabled_ok += 1
+            except Exception as e:
+                console.print(f"  [red]✗[/red] Failed to disable {auto.entity_id}: {e}")
+                disabled_failed += 1
+
+        console.print()
+
     # Summary
     console.print("=" * 70)
     console.print("[blue]Sync Summary:[/blue]")
     console.print(f"  [green]✓[/green] Succeeded: {len(succeeded)}")
     console.print(f"  [red]✗[/red] Failed: {len(failed)}")
+    if disabled_automation_ids:
+        console.print(f"  [yellow]↧[/yellow] Disabled in HA: {disabled_ok}")
+        console.print(
+            f"  [bright_black]~[/bright_black] Disabled targets not found: {disabled_missing}"
+        )
+        if disabled_failed:
+            console.print(f"  [red]✗[/red] Disable failed: {disabled_failed}")
 
     if failed:
         console.print("\n[dark_orange]Failed scripts:[/dark_orange]")
@@ -997,18 +1233,20 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
                 auto_id = auto.automation_id or ""
                 # Check if automation ID matches any script name pattern
                 is_from_script = any(
-                    auto_id.startswith(name.replace('_', '_').lower())
+                    auto_id.startswith(name.replace("_", "_").lower())
                     for name in script_names
                 )
 
                 if not is_from_script and auto_id:
                     # Check if it looks like it was created by our scripts
                     # (has timestamp suffix pattern)
-                    if '_' in auto_id and auto_id.split('_')[-1].isdigit():
+                    if "_" in auto_id and auto_id.split("_")[-1].isdigit():
                         orphaned.append(auto)
 
             if orphaned:
-                console.print(f"\n[dark_orange]Found {len(orphaned)} potentially orphaned automation(s):[/dark_orange]")
+                console.print(
+                    f"\n[dark_orange]Found {len(orphaned)} potentially orphaned automation(s):[/dark_orange]"
+                )
                 for auto in orphaned:
                     console.print(f"  • {auto.friendly_name} ({auto.automation_id})")
 
@@ -1016,9 +1254,13 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
                     for auto in orphaned:
                         try:
                             manager.delete_automation(auto.automation_id)
-                            console.print(f"  [green]✓[/green] Deleted: {auto.friendly_name}")
+                            console.print(
+                                f"  [green]✓[/green] Deleted: {auto.friendly_name}"
+                            )
                         except Exception as e:
-                            console.print(f"  [red]✗[/red] Failed to delete {auto.friendly_name}: {e}")
+                            console.print(
+                                f"  [red]✗[/red] Failed to delete {auto.friendly_name}: {e}"
+                            )
 
                     # Reload after deletions
                     console.print("\n[blue]Reloading automations...[/blue]")
@@ -1033,8 +1275,8 @@ def sync(directory: Optional[str], dry_run: bool, clean: bool):
     console.print()
 
 
-@main.command('init')
-@click.argument('directory', default='ha-automations', required=False)
+@main.command("init")
+@click.argument("directory", default="ha-automations", required=False)
 def init(directory: str):
     """
     Initialize a new automation workspace.
@@ -1047,8 +1289,8 @@ def init(directory: str):
         ha-automation init .                  # initialize current directory
         ha-automation init ~/my-automations   # initialize a custom directory
     """
-    import shutil
     import importlib.resources
+    import shutil
 
     target = Path(directory).expanduser().resolve()
     target.mkdir(parents=True, exist_ok=True)
@@ -1102,7 +1344,9 @@ def init(directory: str):
             console.print(f"  [green]created[/green]  {f}")
     if skipped:
         for f in skipped:
-            console.print(f"  [bright_black]skipped[/bright_black]  {f} (already exists)")
+            console.print(
+                f"  [bright_black]skipped[/bright_black]  {f} (already exists)"
+            )
 
     # Prompt for HA credentials
     ha_config_path = target / ".ha-config"
@@ -1111,8 +1355,7 @@ def init(directory: str):
         ha_url = click.prompt("  HA URL", default="http://homeassistant.local:8123")
         ha_token = click.prompt("  Long-lived access token", hide_input=True)
         ha_config_path.write_text(
-            f"HA_URL={ha_url}\nHA_TOKEN={ha_token}\n",
-            encoding="utf-8"
+            f"HA_URL={ha_url}\nHA_TOKEN={ha_token}\n", encoding="utf-8"
         )
         console.print(f"[green]✓[/green] Saved to [blue]{ha_config_path}[/blue]")
         config_written = True
@@ -1152,5 +1395,5 @@ def init(directory: str):
     console.print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
