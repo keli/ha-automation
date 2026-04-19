@@ -14,7 +14,7 @@ User (natural language) → AI Assistant → Python Toolkit → Home Assistant
 
 - 🔍 Device discovery and search (supports Chinese and English)
 - 🚀 Create and update automations directly via Home Assistant REST API
-- 📋 List, enable/disable, trigger, and delete automations
+- 📋 List, enable/disable, trigger, delete automations, and query the logbook
 - 🔄 Sync a directory of Python automation scripts to Home Assistant
 - 🎨 Beautiful terminal output with Rich
 
@@ -96,6 +96,12 @@ ha-automation trigger my_automation_id --skip-condition
 ha-automation delete 1234567890
 ha-automation delete 1234567890 --force
 ha-automation reload
+
+# Query the logbook
+ha-automation logbook                              # last 24 hours
+ha-automation logbook --entity automation.lights  # filter by entity
+ha-automation logbook --hours 48                  # last 48 hours
+ha-automation logbook --json                      # JSON output
 ```
 
 ### Scripts

@@ -565,7 +565,7 @@ def validate(yaml_file):
 
 
 @main.command("run")
-@click.argument("script_path", type=click.Path(exists=True))
+@click.argument("script_path", type=click.Path(path_type=Path))
 def run(script_path):
     """
     Execute a Python automation script.
@@ -578,9 +578,32 @@ def run(script_path):
     """
     import subprocess
     import sys
-    from pathlib import Path
 
-    script = Path(script_path)
+    script_input = script_path.expanduser()
+    candidates = []
+
+    if script_input.is_absolute():
+        candidates.append(script_input)
+    else:
+        cwd = Path.cwd()
+        candidates.append(cwd / script_input)
+        # Allow running scripts in the conventional ./automations directory by name.
+        if len(script_input.parts) == 1:
+            candidates.append(cwd / "automations" / script_input)
+
+    script = None
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            script = candidate.resolve()
+            break
+
+    if script is None:
+        searched = "\n".join(f"  - {p}" for p in candidates)
+        console.print(
+            "[red]Error:[/red] Script not found. Searched paths:\n"
+            f"{searched}"
+        )
+        raise click.Abort()
 
     console.print(f"[blue]Running:[/blue] {script.name}\n")
 
@@ -1347,6 +1370,7 @@ def init(directory: str, lang: Optional[str]):
 
     # Copy selected AGENTS template into workspace root
     _copy(selected_agents_template, target / "AGENTS.md")
+    _copy("CLAUDE.md", target / "CLAUDE.md")
 
     # Copy example script into workspace automations/ subdir
     automations_dir.mkdir(parents=True, exist_ok=True)
@@ -1418,6 +1442,69 @@ def init(directory: str, lang: Optional[str]):
         "[blue]ha-automation test[/blue]"
     )
     console.print()
+
+
+@main.command("logbook")
+@click.option("--entity", "-e", "entity_id", default=None, help="Filter by entity ID")
+@click.option(
+    "--hours",
+    "-n",
+    type=int,
+    default=24,
+    help="How many hours back to query (default: 24)",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def logbook(entity_id: Optional[str], hours: int, output_json: bool):
+    """Query the Home Assistant logbook."""
+    from datetime import datetime as _dt, timezone, timedelta
+
+    try:
+        client = HAClient()
+        start = (_dt.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+        with console.status("[blue]Fetching logbook..."):
+            entries = client.get_logbook(start_time=start, entity_id=entity_id)
+
+        if output_json:
+            console.print(json.dumps(entries, indent=2, ensure_ascii=False))
+            return
+
+        if not entries:
+            console.print("[bright_black]No logbook entries found.[/bright_black]")
+            return
+
+        title = f"Logbook (last {hours}h)"
+        if entity_id:
+            title += f" — {entity_id}"
+        table = Table(title=title, box=box.ROUNDED)
+        table.add_column("Time", style="dim", no_wrap=True)
+        table.add_column("Entity", style="blue", no_wrap=True)
+        table.add_column("Name", style="black")
+        table.add_column("Message", style="default")
+
+        for entry in entries:
+            when = entry.get("when", "")
+            try:
+                dt = _dt.fromisoformat(when.replace("Z", "+00:00"))
+                local_dt = dt.astimezone()
+                when = local_dt.strftime("%m-%d %H:%M:%S")
+            except Exception:
+                pass
+
+            entity = entry.get("entity_id", "")
+            name = entry.get("name", "")
+            message = entry.get("message", entry.get("state", ""))
+
+            table.add_row(when, entity, name, message)
+
+        console.print(table)
+        console.print(
+            f"\n[bright_black]Total: {len(entries)} entries[/bright_black]"
+        )
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise click.Abort()
 
 
 if __name__ == "__main__":

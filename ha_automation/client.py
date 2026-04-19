@@ -204,6 +204,39 @@ class HAClient:
         response = self._request("POST", endpoint, json=config)
         return response.json() if response.text else {}
 
+    def get_logbook(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        entity_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get logbook entries from Home Assistant.
+
+        Args:
+            start_time: ISO 8601 start time (default: 24 hours ago)
+            end_time: ISO 8601 end time (default: now)
+            entity_id: Filter by entity ID
+
+        Returns:
+            List of logbook entry dictionaries
+        """
+        from datetime import timezone, timedelta
+
+        if start_time is None:
+            from datetime import datetime as _dt
+            start_time = (_dt.now(timezone.utc) - timedelta(hours=24)).isoformat()
+
+        endpoint = f"/api/logbook/{start_time}"
+        params: Dict[str, str] = {}
+        if end_time:
+            params["end_time"] = end_time
+        if entity_id:
+            params["entity_id"] = entity_id
+
+        response = self._request("GET", endpoint, params=params if params else None)
+        return response.json()
+
     def __repr__(self) -> str:
         """String representation of the client."""
         return f"HAClient(host={self.host}, port={self.port}, ssl={self.use_ssl})"

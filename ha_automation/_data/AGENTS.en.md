@@ -156,6 +156,10 @@ ha-automation enable/disable automation.xxx  # enable/disable
 ha-automation delete <id>                    # delete
 ha-automation reload                         # reload all automations
 ha-automation test                           # test connection
+
+ha-automation logbook                        # logbook: last 24 hours
+ha-automation logbook -e automation.xxx      # filter by entity
+ha-automation logbook --hours 48             # custom time window
 ```
 
 ---

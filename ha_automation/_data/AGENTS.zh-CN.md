@@ -160,6 +160,10 @@ ha-automation enable/disable automation.xxx  # 启用/禁用
 ha-automation delete <id>                    # 删除
 ha-automation reload                         # 重载所有自动化
 ha-automation test                           # 测试连接
+
+ha-automation logbook                        # 查询最近 24 小时日志
+ha-automation logbook -e automation.xxx      # 按实体过滤
+ha-automation logbook --hours 48             # 自定义时间范围
 ```
 
 ---
