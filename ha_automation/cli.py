@@ -1444,6 +1444,67 @@ def init(directory: str, lang: Optional[str]):
     console.print()
 
 
+@main.command("upgrade")
+@click.argument("directory", default=".", required=False)
+@click.option(
+    "--lang",
+    type=click.Choice(["zh", "en"], case_sensitive=False),
+    default=None,
+    help="Language for AGENTS.md (default: auto-detect from existing file).",
+)
+def upgrade(directory: str, lang: Optional[str]):
+    """Upgrade workspace AI docs (AGENTS.md, CLAUDE.md) to the latest version.
+
+    Run this after updating ha-automation to pull in the latest guidance.
+    Your scripts, .ha-config, and other files are not touched.
+
+    Examples:
+        ha-automation upgrade
+        ha-automation upgrade ~/my-automations
+        ha-automation upgrade --lang en
+    """
+    import importlib.resources
+
+    target = Path(directory).expanduser().resolve()
+
+    if not target.is_dir():
+        console.print(f"[red]Directory not found:[/red] {target}")
+        raise click.Abort()
+
+    try:
+        data_path = importlib.resources.files("ha_automation") / "_data"
+    except AttributeError:
+        data_path = Path(__file__).parent / "_data"
+
+    # Auto-detect language from existing AGENTS.md if not specified
+    if lang is None:
+        existing = target / "AGENTS.md"
+        if existing.exists():
+            content = existing.read_text(encoding="utf-8")
+            lang = "zh" if "关键规则" in content else "en"
+        else:
+            lang = "zh"
+
+    language_templates = {"zh": "AGENTS.zh-CN.md", "en": "AGENTS.en.md"}
+    agents_template = language_templates[lang]
+
+    updated = []
+    for src_name, dest in [(agents_template, target / "AGENTS.md"), ("CLAUDE.md", target / "CLAUDE.md")]:
+        src = data_path / src_name
+        try:
+            content = src.read_bytes()
+            dest.write_bytes(content)
+            updated.append(dest.name)
+        except Exception as e:
+            console.print(f"[red]Error updating {dest.name}:[/red] {e}")
+            raise click.Abort()
+
+    console.print(f"\n[green]✓[/green] Workspace upgraded: [blue]{target}[/blue]")
+    for f in updated:
+        console.print(f"  [green]updated[/green]  {f}")
+    console.print()
+
+
 @main.command("logbook")
 @click.option("--entity", "-e", "entity_id", default=None, help="Filter by entity ID")
 @click.option(
