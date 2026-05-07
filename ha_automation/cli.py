@@ -613,7 +613,7 @@ def run(script_path):
             [sys.executable, str(script)],
             capture_output=True,
             text=True,
-            cwd=script.parent,
+            cwd=Path.cwd(),
         )
 
         # Display output
@@ -1371,6 +1371,7 @@ def init(directory: str, lang: Optional[str]):
     # Copy selected AGENTS template into workspace root
     _copy(selected_agents_template, target / "AGENTS.md")
     _copy("CLAUDE.md", target / "CLAUDE.md")
+    _copy("AGENTS.local.md", target / "AGENTS.local.md")
 
     # Copy example script into workspace automations/ subdir
     automations_dir.mkdir(parents=True, exist_ok=True)
